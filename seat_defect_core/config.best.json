@@ -1,0 +1,643 @@
+{
+  "$comment": "seat_defect_core 最佳检测效果配置。启用全部特性:Calibration + Cascading Budget + Tracking + Filter Classifier + Rule Engine。",
+  "seat_defect_inspection": {
+    "part_id": "seat_demo",
+    "default_seat_model_id": "seat_model_a",
+    "output_json_path": "../outputs/seat_defect_inspection/results.json",
+    "debug_dir": "../outputs/seat_defect_inspection/debug",
+    "debug_artifacts_enabled": false,
+    "debug_artifact_names": [
+      "overlay"
+    ],
+    "upload_base_url": "http://localhost:8000",
+    "fusion": {
+      "reject_on_any_reject": true,
+      "ng_strategy": "any",
+      "defect_overrides_reject": true
+    },
+    "cameras": [],
+    "seat_models": [
+      {
+        "seat_model_id": "seat_model_a",
+        "display_name": "座椅型号A",
+        "cameras": [
+          {
+            "camera_id": "cam_back",
+            "source": "",
+            "enabled": true,
+            "quality": {
+              "min_laplacian_variance": 80.0,
+              "min_brightness_mean": 30.0,
+              "max_brightness_mean": 225.0,
+              "max_overexposed_ratio": 0.25,
+              "max_underexposed_ratio": 0.35
+            },
+            "detection": {
+              "model_path": "../models/yolo/best.pt",
+              "target_class": "seat",
+              "confidence": 0.25,
+              "iou": 0.45,
+              "device": "cuda",
+              "imgsz": 960,
+              "fill_segmentation_holes": true,
+              "segmentation_hole_fill_max_area_ratio": 0.08
+            },
+            "roi": {
+              "crop_expand_ratio": 0.02,
+              "crop_shrink_ratio": 0.0,
+              "mask_erode_pixels": 1,
+              "edge_ignore_pixels": 6,
+              "alignment": {
+                "output_width": 256,
+                "output_height": 256
+              }
+            },
+            "efficientad": {
+              "model_path": "../models/seat_model_a/cam_back_efficientad.pt",
+              "device": "cuda",
+              "input_size": 256,
+              "teacher_backbone": "wide_resnet50_2",
+              "student_backbone": "resnet18",
+              "min_valid_pixel_ratio": 0.3,
+              "image_threshold": 0.0,
+              "pixel_threshold": 0.0,
+              "epochs": 200,
+              "batch_size": 16,
+              "learning_rate": 0.0001,
+              "validation_split": 0.1,
+              "early_stopping_patience": 20
+            },
+            "filter_classifier": {
+              "enabled": true,
+              "model_path": "../backend/deployed_models/line_a/filter_classifier/",
+              "device": "cuda",
+              "input_size": 448,
+              "confidence_threshold": 0.5
+            },
+            "rule_engine": {
+              "enabled": true,
+              "rules": [],
+              "deployed_rules_path": "../backend/deployed_models/line_a/rules/rules.json"
+            },
+            "proposal": {
+              "heatmap_threshold_mode": "adaptive",
+              "heatmap_threshold_fixed": 0.5,
+              "heatmap_adaptive_std_multiplier": 1.5,
+              "min_component_area": 16,
+              "min_solidity": 0.3,
+              "max_proposals": 20,
+              "open_kernel_size": 3,
+              "close_kernel_size": 5,
+              "context_padding_ratio": 0.1,
+              "min_crop_size": 20,
+              "aggregation_method": "weighted_confidence",
+              "area_exponent": 0.5,
+              "confidence_threshold": 0.5,
+              "budget": {
+                "enabled": true,
+                "scope": "proposal_and_filter",
+                "target_latency_ms": 15.0,
+                "hard_limit_ms": 20.0,
+                "max_cc_before_emergency": 50,
+                "avg_filter_latency_ms": 3.0,
+                "window_size": 100,
+                "threshold_multiplier_step": 0.5,
+                "threshold_multiplier_max": 3.0,
+                "recovery_rate": 0.01
+              }
+            },
+            "calibration": {
+              "enabled": true,
+              "camera_norm": {
+                "enabled": true,
+                "stats_path": "../models/calibration/cam_back_norm_stats.npz"
+              },
+              "projection": {
+                "enabled": true,
+                "projector_path": "../models/calibration/projector.npz"
+              },
+              "whitening": {
+                "enabled": true,
+                "method": "zca",
+                "regularization": 0.0001,
+                "matrix_path": "../models/calibration/whitening_matrix.npz"
+              },
+              "ema_center": {
+                "enabled": true,
+                "alpha": 0.99,
+                "min_samples": 10,
+                "novelty_threshold": 0.3,
+                "centers_path": "../models/calibration/defect_centers.json"
+              }
+            },
+            "track": {
+              "max_age": 30,
+              "min_hits": 2,
+              "mature_hits": 5,
+              "iou_threshold": 0.3,
+              "mahalanobis_threshold": 9.5,
+              "feature_cosine_threshold": 0.85,
+              "feature_match_margin": 0.15,
+              "nms_iou_threshold": 0.5,
+              "cross_camera_cosine_threshold": 0.9,
+              "epipolar_distance_threshold": 50.0
+            },
+            "efficientad_model_path": "../models/seat_model_a/cam_back_efficientad.pt"
+          },
+          {
+            "camera_id": "cam_front",
+            "source": "",
+            "enabled": true,
+            "quality": {
+              "min_laplacian_variance": 80.0,
+              "min_brightness_mean": 30.0,
+              "max_brightness_mean": 225.0,
+              "max_overexposed_ratio": 0.25,
+              "max_underexposed_ratio": 0.35
+            },
+            "detection": {
+              "model_path": "../models/yolo/best.pt",
+              "target_class": "seat",
+              "confidence": 0.25,
+              "iou": 0.45,
+              "device": "cuda",
+              "imgsz": 960,
+              "fill_segmentation_holes": true,
+              "segmentation_hole_fill_max_area_ratio": 0.08
+            },
+            "roi": {
+              "crop_expand_ratio": 0.02,
+              "crop_shrink_ratio": 0.0,
+              "mask_erode_pixels": 1,
+              "edge_ignore_pixels": 6,
+              "alignment": {
+                "output_width": 256,
+                "output_height": 256
+              }
+            },
+            "efficientad": {
+              "model_path": "../models/seat_model_a/cam_front_efficientad.pt",
+              "device": "cuda",
+              "input_size": 256,
+              "teacher_backbone": "wide_resnet50_2",
+              "student_backbone": "resnet18",
+              "min_valid_pixel_ratio": 0.3,
+              "image_threshold": 0.0,
+              "pixel_threshold": 0.0,
+              "epochs": 200,
+              "batch_size": 16,
+              "learning_rate": 0.0001,
+              "validation_split": 0.1,
+              "early_stopping_patience": 20
+            },
+            "filter_classifier": {
+              "enabled": true,
+              "model_path": "../backend/deployed_models/line_a/filter_classifier/",
+              "device": "cuda",
+              "input_size": 448,
+              "confidence_threshold": 0.5
+            },
+            "rule_engine": {
+              "enabled": true,
+              "rules": [],
+              "deployed_rules_path": "../backend/deployed_models/line_a/rules/rules.json"
+            },
+            "proposal": {
+              "heatmap_threshold_mode": "adaptive",
+              "heatmap_threshold_fixed": 0.5,
+              "heatmap_adaptive_std_multiplier": 1.5,
+              "min_component_area": 16,
+              "min_solidity": 0.3,
+              "max_proposals": 20,
+              "open_kernel_size": 3,
+              "close_kernel_size": 5,
+              "context_padding_ratio": 0.1,
+              "min_crop_size": 20,
+              "aggregation_method": "weighted_confidence",
+              "area_exponent": 0.5,
+              "confidence_threshold": 0.5,
+              "budget": {
+                "enabled": true,
+                "scope": "proposal_and_filter",
+                "target_latency_ms": 15.0,
+                "hard_limit_ms": 20.0,
+                "max_cc_before_emergency": 50,
+                "avg_filter_latency_ms": 3.0,
+                "window_size": 100,
+                "threshold_multiplier_step": 0.5,
+                "threshold_multiplier_max": 3.0,
+                "recovery_rate": 0.01
+              }
+            },
+            "calibration": {
+              "enabled": true,
+              "camera_norm": {
+                "enabled": true,
+                "stats_path": "../models/calibration/cam_front_norm_stats.npz"
+              },
+              "projection": {
+                "enabled": true,
+                "projector_path": "../models/calibration/projector.npz"
+              },
+              "whitening": {
+                "enabled": true,
+                "method": "zca",
+                "regularization": 0.0001,
+                "matrix_path": "../models/calibration/whitening_matrix.npz"
+              },
+              "ema_center": {
+                "enabled": true,
+                "alpha": 0.99,
+                "min_samples": 10,
+                "novelty_threshold": 0.3,
+                "centers_path": "../models/calibration/defect_centers.json"
+              }
+            },
+            "track": {
+              "max_age": 30,
+              "min_hits": 2,
+              "mature_hits": 5,
+              "iou_threshold": 0.3,
+              "mahalanobis_threshold": 9.5,
+              "feature_cosine_threshold": 0.85,
+              "feature_match_margin": 0.15,
+              "nms_iou_threshold": 0.5,
+              "cross_camera_cosine_threshold": 0.9,
+              "epipolar_distance_threshold": 50.0
+            },
+            "efficientad_model_path": "../models/seat_model_a/cam_front_efficientad.pt"
+          },
+          {
+            "camera_id": "cam_left",
+            "source": "",
+            "enabled": true,
+            "quality": {
+              "min_laplacian_variance": 80.0,
+              "min_brightness_mean": 30.0,
+              "max_brightness_mean": 225.0,
+              "max_overexposed_ratio": 0.25,
+              "max_underexposed_ratio": 0.35
+            },
+            "detection": {
+              "model_path": "../models/yolo/best.pt",
+              "target_class": "seat",
+              "confidence": 0.25,
+              "iou": 0.45,
+              "device": "cuda",
+              "imgsz": 960,
+              "fill_segmentation_holes": true,
+              "segmentation_hole_fill_max_area_ratio": 0.08
+            },
+            "roi": {
+              "crop_expand_ratio": 0.02,
+              "crop_shrink_ratio": 0.0,
+              "mask_erode_pixels": 1,
+              "edge_ignore_pixels": 6,
+              "alignment": {
+                "output_width": 256,
+                "output_height": 256
+              }
+            },
+            "efficientad": {
+              "model_path": "../models/seat_model_a/cam_left_efficientad.pt",
+              "device": "cuda",
+              "input_size": 256,
+              "teacher_backbone": "wide_resnet50_2",
+              "student_backbone": "resnet18",
+              "min_valid_pixel_ratio": 0.3,
+              "image_threshold": 0.0,
+              "pixel_threshold": 0.0,
+              "epochs": 200,
+              "batch_size": 16,
+              "learning_rate": 0.0001,
+              "validation_split": 0.1,
+              "early_stopping_patience": 20
+            },
+            "filter_classifier": {
+              "enabled": true,
+              "model_path": "../backend/deployed_models/line_a/filter_classifier/",
+              "device": "cuda",
+              "input_size": 448,
+              "confidence_threshold": 0.5
+            },
+            "rule_engine": {
+              "enabled": true,
+              "rules": [],
+              "deployed_rules_path": "../backend/deployed_models/line_a/rules/rules.json"
+            },
+            "proposal": {
+              "heatmap_threshold_mode": "adaptive",
+              "heatmap_threshold_fixed": 0.5,
+              "heatmap_adaptive_std_multiplier": 1.5,
+              "min_component_area": 16,
+              "min_solidity": 0.3,
+              "max_proposals": 20,
+              "open_kernel_size": 3,
+              "close_kernel_size": 5,
+              "context_padding_ratio": 0.1,
+              "min_crop_size": 20,
+              "aggregation_method": "weighted_confidence",
+              "area_exponent": 0.5,
+              "confidence_threshold": 0.5,
+              "budget": {
+                "enabled": true,
+                "scope": "proposal_and_filter",
+                "target_latency_ms": 15.0,
+                "hard_limit_ms": 20.0,
+                "max_cc_before_emergency": 50,
+                "avg_filter_latency_ms": 3.0,
+                "window_size": 100,
+                "threshold_multiplier_step": 0.5,
+                "threshold_multiplier_max": 3.0,
+                "recovery_rate": 0.01
+              }
+            },
+            "calibration": {
+              "enabled": true,
+              "camera_norm": {
+                "enabled": true,
+                "stats_path": "../models/calibration/cam_left_norm_stats.npz"
+              },
+              "projection": {
+                "enabled": true,
+                "projector_path": "../models/calibration/projector.npz"
+              },
+              "whitening": {
+                "enabled": true,
+                "method": "zca",
+                "regularization": 0.0001,
+                "matrix_path": "../models/calibration/whitening_matrix.npz"
+              },
+              "ema_center": {
+                "enabled": true,
+                "alpha": 0.99,
+                "min_samples": 10,
+                "novelty_threshold": 0.3,
+                "centers_path": "../models/calibration/defect_centers.json"
+              }
+            },
+            "track": {
+              "max_age": 30,
+              "min_hits": 2,
+              "mature_hits": 5,
+              "iou_threshold": 0.3,
+              "mahalanobis_threshold": 9.5,
+              "feature_cosine_threshold": 0.85,
+              "feature_match_margin": 0.15,
+              "nms_iou_threshold": 0.5,
+              "cross_camera_cosine_threshold": 0.9,
+              "epipolar_distance_threshold": 50.0
+            },
+            "efficientad_model_path": "../models/seat_model_a/cam_left_efficientad.pt"
+          },
+          {
+            "camera_id": "cam_right",
+            "source": "",
+            "enabled": true,
+            "quality": {
+              "min_laplacian_variance": 80.0,
+              "min_brightness_mean": 30.0,
+              "max_brightness_mean": 225.0,
+              "max_overexposed_ratio": 0.25,
+              "max_underexposed_ratio": 0.35
+            },
+            "detection": {
+              "model_path": "../models/yolo/best.pt",
+              "target_class": "seat",
+              "confidence": 0.25,
+              "iou": 0.45,
+              "device": "cuda",
+              "imgsz": 960,
+              "fill_segmentation_holes": true,
+              "segmentation_hole_fill_max_area_ratio": 0.08
+            },
+            "roi": {
+              "crop_expand_ratio": 0.02,
+              "crop_shrink_ratio": 0.0,
+              "mask_erode_pixels": 1,
+              "edge_ignore_pixels": 6,
+              "alignment": {
+                "output_width": 256,
+                "output_height": 256
+              }
+            },
+            "efficientad": {
+              "model_path": "../models/seat_model_a/cam_right_efficientad.pt",
+              "device": "cuda",
+              "input_size": 256,
+              "teacher_backbone": "wide_resnet50_2",
+              "student_backbone": "resnet18",
+              "min_valid_pixel_ratio": 0.3,
+              "image_threshold": 0.0,
+              "pixel_threshold": 0.0,
+              "epochs": 200,
+              "batch_size": 16,
+              "learning_rate": 0.0001,
+              "validation_split": 0.1,
+              "early_stopping_patience": 20
+            },
+            "filter_classifier": {
+              "enabled": true,
+              "model_path": "../backend/deployed_models/line_a/filter_classifier/",
+              "device": "cuda",
+              "input_size": 448,
+              "confidence_threshold": 0.5
+            },
+            "rule_engine": {
+              "enabled": true,
+              "rules": [],
+              "deployed_rules_path": "../backend/deployed_models/line_a/rules/rules.json"
+            },
+            "proposal": {
+              "heatmap_threshold_mode": "adaptive",
+              "heatmap_threshold_fixed": 0.5,
+              "heatmap_adaptive_std_multiplier": 1.5,
+              "min_component_area": 16,
+              "min_solidity": 0.3,
+              "max_proposals": 20,
+              "open_kernel_size": 3,
+              "close_kernel_size": 5,
+              "context_padding_ratio": 0.1,
+              "min_crop_size": 20,
+              "aggregation_method": "weighted_confidence",
+              "area_exponent": 0.5,
+              "confidence_threshold": 0.5,
+              "budget": {
+                "enabled": true,
+                "scope": "proposal_and_filter",
+                "target_latency_ms": 15.0,
+                "hard_limit_ms": 20.0,
+                "max_cc_before_emergency": 50,
+                "avg_filter_latency_ms": 3.0,
+                "window_size": 100,
+                "threshold_multiplier_step": 0.5,
+                "threshold_multiplier_max": 3.0,
+                "recovery_rate": 0.01
+              }
+            },
+            "calibration": {
+              "enabled": true,
+              "camera_norm": {
+                "enabled": true,
+                "stats_path": "../models/calibration/cam_right_norm_stats.npz"
+              },
+              "projection": {
+                "enabled": true,
+                "projector_path": "../models/calibration/projector.npz"
+              },
+              "whitening": {
+                "enabled": true,
+                "method": "zca",
+                "regularization": 0.0001,
+                "matrix_path": "../models/calibration/whitening_matrix.npz"
+              },
+              "ema_center": {
+                "enabled": true,
+                "alpha": 0.99,
+                "min_samples": 10,
+                "novelty_threshold": 0.3,
+                "centers_path": "../models/calibration/defect_centers.json"
+              }
+            },
+            "track": {
+              "max_age": 30,
+              "min_hits": 2,
+              "mature_hits": 5,
+              "iou_threshold": 0.3,
+              "mahalanobis_threshold": 9.5,
+              "feature_cosine_threshold": 0.85,
+              "feature_match_margin": 0.15,
+              "nms_iou_threshold": 0.5,
+              "cross_camera_cosine_threshold": 0.9,
+              "epipolar_distance_threshold": 50.0
+            },
+            "efficientad_model_path": "../models/seat_model_a/cam_right_efficientad.pt"
+          },
+          {
+            "camera_id": "cam_top",
+            "source": "",
+            "enabled": true,
+            "quality": {
+              "min_laplacian_variance": 80.0,
+              "min_brightness_mean": 30.0,
+              "max_brightness_mean": 225.0,
+              "max_overexposed_ratio": 0.25,
+              "max_underexposed_ratio": 0.35
+            },
+            "detection": {
+              "model_path": "../models/yolo/best.pt",
+              "target_class": "seat",
+              "confidence": 0.25,
+              "iou": 0.45,
+              "device": "cuda",
+              "imgsz": 960,
+              "fill_segmentation_holes": true,
+              "segmentation_hole_fill_max_area_ratio": 0.08
+            },
+            "roi": {
+              "crop_expand_ratio": 0.02,
+              "crop_shrink_ratio": 0.0,
+              "mask_erode_pixels": 1,
+              "edge_ignore_pixels": 6,
+              "alignment": {
+                "output_width": 256,
+                "output_height": 256
+              }
+            },
+            "efficientad": {
+              "model_path": "../models/seat_model_a/cam_top_efficientad.pt",
+              "device": "cuda",
+              "input_size": 256,
+              "teacher_backbone": "wide_resnet50_2",
+              "student_backbone": "resnet18",
+              "min_valid_pixel_ratio": 0.3,
+              "image_threshold": 0.0,
+              "pixel_threshold": 0.0,
+              "epochs": 200,
+              "batch_size": 16,
+              "learning_rate": 0.0001,
+              "validation_split": 0.1,
+              "early_stopping_patience": 20
+            },
+            "filter_classifier": {
+              "enabled": true,
+              "model_path": "../backend/deployed_models/line_a/filter_classifier/",
+              "device": "cuda",
+              "input_size": 448,
+              "confidence_threshold": 0.5
+            },
+            "rule_engine": {
+              "enabled": true,
+              "rules": [],
+              "deployed_rules_path": "../backend/deployed_models/line_a/rules/rules.json"
+            },
+            "proposal": {
+              "heatmap_threshold_mode": "adaptive",
+              "heatmap_threshold_fixed": 0.5,
+              "heatmap_adaptive_std_multiplier": 1.5,
+              "min_component_area": 16,
+              "min_solidity": 0.3,
+              "max_proposals": 20,
+              "open_kernel_size": 3,
+              "close_kernel_size": 5,
+              "context_padding_ratio": 0.1,
+              "min_crop_size": 20,
+              "aggregation_method": "weighted_confidence",
+              "area_exponent": 0.5,
+              "confidence_threshold": 0.5,
+              "budget": {
+                "enabled": true,
+                "scope": "proposal_and_filter",
+                "target_latency_ms": 15.0,
+                "hard_limit_ms": 20.0,
+                "max_cc_before_emergency": 50,
+                "avg_filter_latency_ms": 3.0,
+                "window_size": 100,
+                "threshold_multiplier_step": 0.5,
+                "threshold_multiplier_max": 3.0,
+                "recovery_rate": 0.01
+              }
+            },
+            "calibration": {
+              "enabled": true,
+              "camera_norm": {
+                "enabled": true,
+                "stats_path": "../models/calibration/cam_top_norm_stats.npz"
+              },
+              "projection": {
+                "enabled": true,
+                "projector_path": "../models/calibration/projector.npz"
+              },
+              "whitening": {
+                "enabled": true,
+                "method": "zca",
+                "regularization": 0.0001,
+                "matrix_path": "../models/calibration/whitening_matrix.npz"
+              },
+              "ema_center": {
+                "enabled": true,
+                "alpha": 0.99,
+                "min_samples": 10,
+                "novelty_threshold": 0.3,
+                "centers_path": "../models/calibration/defect_centers.json"
+              }
+            },
+            "track": {
+              "max_age": 30,
+              "min_hits": 2,
+              "mature_hits": 5,
+              "iou_threshold": 0.3,
+              "mahalanobis_threshold": 9.5,
+              "feature_cosine_threshold": 0.85,
+              "feature_match_margin": 0.15,
+              "nms_iou_threshold": 0.5,
+              "cross_camera_cosine_threshold": 0.9,
+              "epipolar_distance_threshold": 50.0
+            },
+            "efficientad_model_path": "../models/seat_model_a/cam_top_efficientad.pt"
+          }
+        ]
+      }
+    ]
+  }
+}

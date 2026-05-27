@@ -1,0 +1,138 @@
+{
+  "$comment": "seat_defect_core 检测配置（示例）。路径类字段相对于本配置文件所在目录解析。全特性配置见 config.best.json。",
+  "seat_defect_inspection": {
+    "part_id": "seat_demo",
+    "default_seat_model_id": "seat_model_a",
+    "output_json_path": "../outputs/seat_defect_inspection/results.json",
+    "debug_dir": "../outputs/seat_defect_inspection/debug",
+    "debug_artifacts_enabled": false,
+    "debug_artifact_names": [
+      "overlay"
+    ],
+    "upload_base_url": "http://localhost:8000",
+    "fusion": {
+      "reject_on_any_reject": true,
+      "ng_strategy": "any",
+      "defect_overrides_reject": true
+    },
+    "cameras": [],
+    "seat_models": [
+      {
+        "seat_model_id": "seat_model_a",
+        "display_name": "座椅型号A",
+        "cameras": [
+          {
+            "camera_id": "cam_back",
+            "source": "",
+            "enabled": true,
+            "quality": {
+              "min_laplacian_variance": 80.0,
+              "min_brightness_mean": 30.0,
+              "max_brightness_mean": 225.0,
+              "max_overexposed_ratio": 0.25,
+              "max_underexposed_ratio": 0.35
+            },
+            "detection": {
+              "model_path": "../models/yolo/best.pt",
+              "target_class": "seat",
+              "confidence": 0.25,
+              "iou": 0.45,
+              "device": "mps",
+              "imgsz": 960,
+              "fill_segmentation_holes": true,
+              "segmentation_hole_fill_max_area_ratio": 0.08
+            },
+            "roi": {
+              "crop_expand_ratio": 0.02,
+              "crop_shrink_ratio": 0.0,
+              "mask_erode_pixels": 1,
+              "edge_ignore_pixels": 4,
+              "alignment": {
+                "output_width": 256,
+                "output_height": 256
+              }
+            },
+            "filter_classifier": {
+              "enabled": true,
+              "model_path": "../backend/deployed_models/line_a/filter_classifier/",
+              "device": "mps",
+              "input_size": 224,
+              "confidence_threshold": 0.5
+            },
+            "rule_engine": {
+              "enabled": true,
+              "rules": [],
+              "deployed_rules_path": "../backend/deployed_models/line_a/rules/rules.json"
+            },
+            "efficientad_model_path": "../models/seat_model_a/cam_0_lower_efficientad.pt",
+            "efficientad": {
+              "model_path": "../models/seat_model_a/cam_0_lower_efficientad.pt",
+              "device": "mps",
+              "input_size": 256,
+              "teacher_backbone": "wide_resnet50_2",
+              "student_backbone": "resnet18",
+              "min_valid_pixel_ratio": 0.3,
+              "image_threshold": 0.0,
+              "pixel_threshold": 0.0
+            }
+          },
+          {
+            "camera_id": "cam_front",
+            "source": "",
+            "enabled": true,
+            "quality": {
+              "min_laplacian_variance": 80.0,
+              "min_brightness_mean": 30.0,
+              "max_brightness_mean": 225.0,
+              "max_overexposed_ratio": 0.25,
+              "max_underexposed_ratio": 0.35
+            },
+            "detection": {
+              "model_path": "../models/yolo/best.pt",
+              "target_class": "seat",
+              "confidence": 0.25,
+              "iou": 0.45,
+              "device": "mps",
+              "imgsz": 960,
+              "fill_segmentation_holes": true,
+              "segmentation_hole_fill_max_area_ratio": 0.08
+            },
+            "roi": {
+              "crop_expand_ratio": 0.02,
+              "crop_shrink_ratio": 0.0,
+              "mask_erode_pixels": 1,
+              "edge_ignore_pixels": 4,
+              "alignment": {
+                "output_width": 256,
+                "output_height": 256
+              }
+            },
+            "filter_classifier": {
+              "enabled": true,
+              "model_path": "../backend/deployed_models/line_a/filter_classifier/",
+              "device": "mps",
+              "input_size": 224,
+              "confidence_threshold": 0.5
+            },
+            "rule_engine": {
+              "enabled": true,
+              "rules": [],
+              "deployed_rules_path": "../backend/deployed_models/line_a/rules/rules.json"
+            },
+            "efficientad_model_path": "../models/seat_model_a/cam_1_lower_efficientad.pt",
+            "efficientad": {
+              "model_path": "../models/seat_model_a/cam_1_lower_efficientad.pt",
+              "device": "mps",
+              "input_size": 256,
+              "teacher_backbone": "wide_resnet50_2",
+              "student_backbone": "resnet18",
+              "min_valid_pixel_ratio": 0.3,
+              "image_threshold": 0.0,
+              "pixel_threshold": 0.0
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

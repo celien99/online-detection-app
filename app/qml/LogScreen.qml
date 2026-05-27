@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import "components"
 
@@ -8,19 +9,18 @@ Rectangle {
 
     property var logModel: []
 
-    Column {
+    ColumnLayout {
         anchors.fill: parent
         anchors.margins: 12
         spacing: 8
 
-        Row {
+        RowLayout {
             spacing: 12
             Text {
                 text: qsTr("📋 检测日志")
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontSizeLG
                 font.bold: true
-                anchors.verticalCenter: parent.verticalCenter
             }
             Item { Layout.fillWidth: true }
             ActionButton {
@@ -30,8 +30,8 @@ Rectangle {
             }
         }
 
-        Row { spacing: 8
-            Text { text: qsTr("筛选:"); color: Theme.textSecondary; anchors.verticalCenter: parent.verticalCenter }
+        RowLayout { spacing: 8
+            Text { text: qsTr("筛选:"); color: Theme.textSecondary }
             ComboBox {
                 model: [qsTr("全部状态"), "OK", "NG", "REJECT"]
             }

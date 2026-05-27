@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import "components"
 
@@ -18,37 +19,49 @@ ApplicationWindow {
     footer: TabBar {
         id: navBar
         background: Rectangle { color: Theme.bgSecondary }
+        onCurrentIndexChanged: {
+            if (currentIndex === 1 && window.statsViewModel) window.statsViewModel.refresh();
+            if (currentIndex === 2 && window.logViewModel) window.logViewModel.refresh();
+        }
 
         TabButton {
+            id: monitorTab
             text: qsTr("📷 监控")
-            contentItem: Text { text: parent.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
-            background: Rectangle { color: parent.checked ? Theme.bgTertiary : "transparent" }
+            contentItem: Text { text: monitorTab.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
+            background: Rectangle { color: monitorTab.checked ? Theme.bgTertiary : "transparent" }
         }
         TabButton {
+            id: statsTab
             text: qsTr("📊 统计")
-            contentItem: Text { text: parent.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
-            background: Rectangle { color: parent.checked ? Theme.bgTertiary : "transparent" }
+            contentItem: Text { text: statsTab.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
+            background: Rectangle { color: statsTab.checked ? Theme.bgTertiary : "transparent" }
         }
         TabButton {
+            id: logTab
             text: qsTr("📋 日志")
-            contentItem: Text { text: parent.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
-            background: Rectangle { color: parent.checked ? Theme.bgTertiary : "transparent" }
+            contentItem: Text { text: logTab.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
+            background: Rectangle { color: logTab.checked ? Theme.bgTertiary : "transparent" }
         }
         TabButton {
+            id: settingsTab
             text: qsTr("⚙ 设置")
-            contentItem: Text { text: parent.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
-            background: Rectangle { color: parent.checked ? Theme.bgTertiary : "transparent" }
+            contentItem: Text { text: settingsTab.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
+            background: Rectangle { color: settingsTab.checked ? Theme.bgTertiary : "transparent" }
         }
     }
 
-    StackView {
-        id: stackView
+    StackLayout {
         anchors.fill: parent
-        initialItem: MainScreen { viewModel: window.mainViewModel }
+        currentIndex: navBar.currentIndex
 
-        onCurrentIndexChanged: {
-            if (currentIndex === 1) window.statsViewModel.refresh();
-            if (currentIndex === 2) window.logViewModel.refresh();
+        MainScreen { viewModel: window.mainViewModel }
+        StatsScreen {
+            total: window.statsViewModel ? window.statsViewModel.total : 0
+            ok: window.statsViewModel ? window.statsViewModel.ok : 0
+            ng: window.statsViewModel ? window.statsViewModel.ng : 0
+            okRate: window.statsViewModel ? window.statsViewModel.okRate : 0.0
         }
+        LogScreen { logModel: window.logViewModel ? window.logViewModel.logs : [] }
+        SettingsScreen {}
     }
 }

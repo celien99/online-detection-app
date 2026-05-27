@@ -1,0 +1,179 @@
+"""Public inspect runtime API."""
+
+from __future__ import annotations
+
+from os import PathLike
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
+import cv2
+
+from .config import InspectionConfig
+from .runtime_config import load_config
+from .core_types import InspectionFrame, InspectionResponse
+
+ConfigSource = Union[str, PathLike, InspectionConfig]
+
+
+class SeatDefectInspector:
+    """Reusable inspect-only runtime."""
+
+    def __init__(self, config: ConfigSource) -> None:
+        from .service.core import InspectionService
+
+        self.config = resolve_config(config)
+        self._service = InspectionService(self.config)
+
+    def inspect(
+        self,
+        frames: Sequence[Union[InspectionFrame, Dict[str, Any]]],
+        *,
+        part_id: Optional[str] = None,
+        seat_model_id: Optional[str] = None,
+    ) -> Tuple[InspectionResponse, Dict[str, Any]]:
+        """Run one full inspection from externally supplied camera frames.
+
+        Returns a tuple of ``(response, camera_images)`` where *camera_images*
+        maps ``camera_id`` to the BGR overlay image (frame + anomaly heatmap).
+        """
+        from .service.frames import normalize_inspection_frames
+        from .service.inspection import inspect_frames
+        from .service.response import build_inspection_response, collect_camera_images
+
+        result = inspect_frames(
+            self._service,
+            normalize_inspection_frames(frames),
+            part_id=part_id,
+            seat_model_id=seat_model_id,
+        )
+        response = build_inspection_response(self.config, result)
+        # 如果配置了 upload_base_url，自动将 NG 结果上传到离线平台
+        self._maybe_upload_anomalies(response)
+        return response, collect_camera_images(result)
+
+    def _maybe_upload_anomalies(self, response: InspectionResponse) -> None:
+        """后台线程上传异常到离线分析平台（仅上传真实 NG 结果，跳过 Filter 抑制的 OK）。"""
+        upload_url = self.config.upload_base_url
+        if not upload_url:
+            return
+        from .anomaly_uploader import upload_inspection_response
+        import threading
+
+        def _upload() -> None:
+            try:
+                # 仅上传真实 NG 结果；Filter 分类器抑制的假阳性不再上传，
+                # 避免在 Anomaly 系统中产生 noise 数据
+                upload_inspection_response(response, upload_url)
+            except Exception:
+                pass  # 上传失败不影响在线检测主流程
+
+        threading.Thread(target=_upload, daemon=True).start()
+
+    def inspect_paths(
+        self,
+        image_paths: Dict[str, Union[str, "PathLike[str]"]],
+        *,
+        part_id: Optional[str] = None,
+        seat_model_id: Optional[str] = None,
+        frame_id: Optional[str] = None,
+        timestamp: Optional[str] = None,
+    ) -> Tuple[InspectionResponse, Dict[str, Any]]:
+        """Run one inspection from externally supplied image paths.
+
+        Returns a tuple of ``(response, camera_images)``.
+        """
+        return self.inspect(
+            frames_from_paths(
+                image_paths,
+                frame_id=frame_id,
+                timestamp=timestamp,
+            ),
+            part_id=part_id,
+            seat_model_id=seat_model_id,
+        )
+
+    def warmup(self, *, seat_model_id: Optional[str] = None) -> None:
+        """Preload active runtime models and run a lightweight warmup."""
+        self._service.warmup(seat_model_id=seat_model_id)
+
+
+def inspect_once(
+    config: ConfigSource,
+    frames: List[Union[InspectionFrame, Dict[str, Any]]],
+    *,
+    part_id: Optional[str] = None,
+    seat_model_id: Optional[str] = None,
+) -> Tuple[InspectionResponse, Dict[str, Any]]:
+    """Load config and run one inspection from externally supplied frames.
+
+    Returns a tuple of ``(response, camera_images)``.
+    """
+    return SeatDefectInspector(config).inspect(
+        frames,
+        part_id=part_id,
+        seat_model_id=seat_model_id,
+    )
+
+
+def inspect_paths_once(
+    config: ConfigSource,
+    image_paths: Dict[str, Union[str, "PathLike[str]"]],
+    *,
+    part_id: Optional[str] = None,
+    seat_model_id: Optional[str] = None,
+    frame_id: Optional[str] = None,
+    timestamp: Optional[str] = None,
+) -> Tuple[InspectionResponse, Dict[str, Any]]:
+    """Load config and run one inspection from image paths.
+
+    Returns a tuple of ``(response, camera_images)``.
+    """
+    return SeatDefectInspector(config).inspect_paths(
+        image_paths,
+        part_id=part_id,
+        seat_model_id=seat_model_id,
+        frame_id=frame_id,
+        timestamp=timestamp,
+    )
+
+
+def frames_from_paths(
+    image_paths: Dict[str, Union[str, "PathLike[str]"]],
+    *,
+    frame_id: Optional[str] = None,
+    timestamp: Optional[str] = None,
+) -> List[InspectionFrame]:
+    """Build InspectionFrame objects from a camera_id to image_path mapping."""
+    frames: List[InspectionFrame] = []
+    for camera_id, image_path in image_paths.items():
+        path = str(image_path)
+        image = cv2.imread(path, cv2.IMREAD_COLOR)
+        error_reason = None if image is not None else "image_read_failed"
+        frames.append(
+            InspectionFrame(
+                camera_id=str(camera_id),
+                image=image,
+                source=path,
+                frame_id=frame_id,
+                timestamp=timestamp,
+                source_kind="image_path",
+                error_reason=error_reason,
+            )
+        )
+    return frames
+
+
+def resolve_config(config: ConfigSource) -> InspectionConfig:
+    """Resolve a config object or JSON/INI path into runtime config."""
+    if isinstance(config, InspectionConfig):
+        return config
+    return load_config(str(config))
+
+
+__all__ = [
+    "ConfigSource",
+    "SeatDefectInspector",
+    "frames_from_paths",
+    "inspect_paths_once",
+    "inspect_once",
+    "resolve_config",
+]

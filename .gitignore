@@ -6,3 +6,7 @@ config.json
 *.log
 logs/
 screenshots/
+build/
+.torch_cache/
+*.egg-info
+.DS_Store

@@ -5,6 +5,11 @@ Rectangle {
     id: statsScreen
     color: Theme.bgPrimary
 
+    property int total: 0
+    property int ok: 0
+    property int ng: 0
+    property real okRate: 0.0
+
     Column {
         anchors.fill: parent
         anchors.margins: 12
@@ -21,25 +26,26 @@ Rectangle {
             InfoCard {
                 accentColor: Theme.statusOK
                 cardLabel: qsTr("今日 OK")
-                cardValue: "—"
+                cardValue: String(ok)
                 width: 160
             }
             InfoCard {
                 accentColor: Theme.statusNG
                 cardLabel: qsTr("今日 NG")
-                cardValue: "—"
+                cardValue: String(ng)
                 width: 160
             }
             InfoCard {
                 accentColor: Theme.accent
                 cardLabel: qsTr("OK 率")
-                cardValue: "—"
+                cardValue: okRate.toFixed(1) + "%"
                 width: 160
             }
             InfoCard {
                 accentColor: Theme.statusWarning
                 cardLabel: qsTr("Filter 抑制")
-                cardValue: "—"
+                cardValue: String(total - ok - ng)
+                cardSubtext: "Filter Suppressed"
                 width: 160
             }
         }

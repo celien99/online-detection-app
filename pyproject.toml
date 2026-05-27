@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Industrial online seat defect detection program"
 requires-python = ">=3.11"
 dependencies = [
+    "seat_defect_core",
     "pyside6>=6.6.0",
     "numpy>=1.24.0",
     "opencv-python>=4.8.0",
@@ -25,3 +26,6 @@ line-length = 120
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 qt_api = "pyside6"
+
+[tool.uv.sources]
+seat_defect_core = { path = "seat_defect_core" }
