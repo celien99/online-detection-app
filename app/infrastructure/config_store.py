@@ -54,15 +54,40 @@ class ConfigStore:
             return node if node is not None else default
 
     def set(self, path: str, value: Any) -> None:
-        """在内存中设置值并标记 dirty（尚未持久化）。"""
+        """在内存中设置值并标记 dirty（支持列表下标如 cameras.0.efficientad_model_path）。"""
         with self._lock:
             parts = path.split(".")
             node = self._data
             for part in parts[:-1]:
-                if part not in node or not isinstance(node[part], dict):
-                    node[part] = {}
-                node = node[part]
-            node[parts[-1]] = value
+                if isinstance(node, dict):
+                    if part not in node or not isinstance(node[part], (dict, list)):
+                        node[part] = {}
+                    node = node[part]
+                elif isinstance(node, (list, tuple)):
+                    try:
+                        idx = int(part)
+                        if 0 <= idx < len(node):
+                            node = node[idx]
+                        else:
+                            return
+                    except (ValueError, IndexError):
+                        return
+                else:
+                    return
+            last = parts[-1]
+            if isinstance(node, dict):
+                node[last] = value
+            elif isinstance(node, (list, tuple)):
+                try:
+                    idx = int(last)
+                    if 0 <= idx < len(node):
+                        node[idx] = value
+                    else:
+                        return
+                except (ValueError, IndexError):
+                    return
+            else:
+                return
         self._dirty[path] = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
 
     def save(self) -> bool:
@@ -88,13 +113,24 @@ class ConfigStore:
         return list(self._dirty.keys())
 
     def get_value_by_path(self, path: str) -> str:
-        """按点号路径读取，返回 JSON 字符串（兼容原 SettingsViewModel.getValue）。"""
+        """按点号路径读取，返回 JSON 字符串（支持列表下标如 cameras.0.efficientad_model_path）。"""
         import json as _json
         with self._lock:
             node: Any = self._data
             for key in path.split("."):
                 if isinstance(node, dict):
-                    node = node.get(key, "")
+                    if key not in node:
+                        return ""
+                    node = node[key]
+                elif isinstance(node, (list, tuple)):
+                    try:
+                        idx = int(key)
+                        if 0 <= idx < len(node):
+                            node = node[idx]
+                        else:
+                            return ""
+                    except (ValueError, IndexError):
+                        return ""
                 else:
                     return ""
         return _json.dumps(node, ensure_ascii=False) if not isinstance(node, str) else node
