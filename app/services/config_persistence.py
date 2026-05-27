@@ -75,12 +75,6 @@ class ConfigPersistenceService:
         """)
         conn.commit()
 
-    # ------------------------------------------------------------------ DB init
-
-    def init_db(self) -> None:
-        with self._get_conn():
-            pass
-
     # ---------------------------------------------------------------- K-V config
 
     def get(self, key: str) -> Optional[str]:
@@ -317,6 +311,13 @@ class ConfigPersistenceService:
 
     def set_model_file_active(self, file_id: str, camera_id: str, model_type: str) -> None:
         with self._get_conn() as conn:
+            # Verify the file_id exists and belongs to this camera+type
+            row = conn.execute(
+                "SELECT id FROM model_files WHERE id = ? AND camera_id = ? AND model_type = ?",
+                (file_id, camera_id, model_type),
+            ).fetchone()
+            if row is None:
+                return  # silently ignore -- caller should validate
             conn.execute(
                 "UPDATE model_files SET is_active = 0 WHERE camera_id = ? AND model_type = ?",
                 (camera_id, model_type),
@@ -377,9 +378,14 @@ def _set_nested(data: dict, key: str, value: str) -> None:
         current[last] = True
     elif value.lower() == "false":
         current[last] = False
-    elif value.isdigit():
-        current[last] = int(value)
     elif value.startswith("[") or value.startswith("{"):
         current[last] = json.loads(value)
     else:
-        current[last] = value
+        # Try int first (supports negatives), then float, fall back to string
+        try:
+            current[last] = int(value)
+        except ValueError:
+            try:
+                current[last] = float(value)
+            except ValueError:
+                current[last] = value

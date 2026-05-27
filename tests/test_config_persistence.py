@@ -9,10 +9,11 @@ from pathlib import Path
 from app.services.config_persistence import ConfigPersistenceService
 
 
-def test_init_db_creates_tables(tmp_path: Path):
+def test_auto_init_creates_tables(tmp_path: Path):
     db_path = str(tmp_path / "test.db")
     svc = ConfigPersistenceService(db_path)
-    svc.init_db()
+    # Any K-V operation triggers auto-init of tables
+    svc.set("k", "v")
 
     import sqlite3
     conn = sqlite3.connect(db_path)
