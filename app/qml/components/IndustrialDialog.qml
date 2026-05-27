@@ -1,9 +1,10 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Layouts
 import styles
 
 /*
-  Industrial-grade modal dialog — dark glass, backdrop overlay,
+  Industrial-grade modal dialog -- dark glass, backdrop overlay,
   subtle shadow, animated entrance, large touch-friendly buttons.
   Usage:
 
@@ -11,7 +12,7 @@ import styles
         id: myDialog
         title: "新增记录"
         contentHeight: 200
-        onAccepted: { /* handle confirm */ }
+        onAccepted: { ... handle confirm ... }
         // Content goes inside:
         contentItem: ColumnLayout { ... }
     }
@@ -26,19 +27,23 @@ Popup {
 
     // ── Public API ──
     property string title: ""
-    property real contentHeight: 160
+    property real dialogContentHeight: 160
     property string acceptText: qsTr("确认")
     property string cancelText: qsTr("取消")
     property bool showCancel: true
-    property alias contentItem: contentLoader.sourceComponent
+    property alias dialogContent: contentLoader.sourceComponent
 
     signal accepted()
     signal rejected()
 
     // ── Backdrop overlay ──
-    Overlay.modal: Rectangle {
+    parent: Overlay.overlay
+
+    Rectangle {
+        id: backdrop
+        anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.55)
-        Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+        z: root.z - 1
     }
 
     // ── Enter animation ──
@@ -58,7 +63,7 @@ Popup {
         id: dialogBody
         width: 440
         implicitWidth: 440
-        implicitHeight: headerRow.height + separator.height + contentArea.height + footerRow.height
+        implicitHeight: 52 + 1 + root.dialogContentHeight + Theme.spacingLG * 2 + 1 + 56
         color: Theme.bgSecondary
         radius: Theme.radiusLG
         border { width: 1; color: Qt.rgba(1, 1, 1, 0.12) }
@@ -114,7 +119,7 @@ Popup {
             Item {
                 id: contentArea
                 Layout.fillWidth: true
-                Layout.preferredHeight: root.contentHeight
+                Layout.preferredHeight: root.dialogContentHeight
                 Layout.leftMargin: Theme.spacingLG
                 Layout.rightMargin: Theme.spacingLG
                 Layout.topMargin: Theme.spacingLG

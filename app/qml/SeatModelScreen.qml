@@ -28,10 +28,10 @@ Rectangle {
         id: confirmDialog
         property string modelId: ""
         title: qsTr("切换座椅型号")
-        contentHeight: 60
+        dialogContentHeight: 60
         acceptText: qsTr("确认切换")
 
-        contentItem: ColumnLayout {
+        dialogContent: ColumnLayout {
             spacing: Theme.spacingSM
             Text {
                 Layout.fillWidth: true
@@ -199,10 +199,10 @@ Rectangle {
     IndustrialDialog {
         id: addDialog
         title: qsTr("新增座椅型号")
-        contentHeight: 210
+        dialogContentHeight: 210
         acceptText: qsTr("创建")
 
-        contentItem: ColumnLayout {
+        dialogContent: ColumnLayout {
             spacing: 14
 
             ColumnLayout {
@@ -351,10 +351,10 @@ Rectangle {
         property string nameField: ""
         property string descField: ""
         title: qsTr("编辑型号")
-        contentHeight: 160
+        dialogContentHeight: 160
         acceptText: qsTr("保存")
 
-        contentItem: ColumnLayout {
+        dialogContent: ColumnLayout {
             spacing: 14
 
             ColumnLayout {

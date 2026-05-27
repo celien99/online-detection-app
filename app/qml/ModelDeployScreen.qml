@@ -97,12 +97,13 @@ Rectangle {
                         anchors.centerIn: parent
                         spacing: 4
                         Text {
+                            Layout.alignment: Qt.AlignHCenter
                             text: modelData.label
                             color: Theme.textSecondary
                             font.pixelSize: Theme.fontSizeXS
-                            anchors.horizontalCenter: parent.horizontalCenter
                         }
                         Text {
+                            Layout.alignment: Qt.AlignHCenter
                             text: {
                                 if (modelData.valueKey === "syncStatus") return modelDeployScreen.viewModel ? modelDeployScreen.viewModel.syncStatus : "offline";
                                 if (modelData.valueKey === "modelCount") return modelDeployScreen.viewModel ? String(modelDeployScreen.viewModel.modelFiles.length) : "0";
@@ -112,7 +113,6 @@ Rectangle {
                             color: modelData.color
                             font.pixelSize: Theme.fontSizeSM
                             font.bold: true
-                            anchors.horizontalCenter: parent.horizontalCenter
                         }
                     }
                 }
