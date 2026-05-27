@@ -28,18 +28,23 @@ Rectangle {
         id: confirmDialog
         property string modelId: ""
         title: qsTr("切换座椅型号")
-        dialogContentHeight: 60
         acceptText: qsTr("确认切换")
+        onAccepted: {
+            if (seatModelScreen.viewModel && confirmDialog.modelId) {
+                seatModelScreen.viewModel.confirmSwitch(confirmDialog.modelId);
+            }
+        }
 
-        dialogContent: ColumnLayout {
-            spacing: Theme.spacingSM
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 6
             Text {
                 Layout.fillWidth: true
-                text: qsTr("切换型号将重新加载检测引擎，当前检测任务会被中断。")
+                text: qsTr("切换型号将重新加载检测引擎，\n当前检测任务会被中断。")
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSizeSM
                 wrapMode: Text.Wrap
-                lineHeight: 1.5
+                lineHeight: 1.6
             }
             Text {
                 Layout.fillWidth: true
@@ -47,11 +52,6 @@ Rectangle {
                 color: Theme.statusWarning
                 font.pixelSize: Theme.fontSizeSM
                 font.weight: Font.DemiBold
-            }
-        }
-        onAccepted: {
-            if (seatModelScreen.viewModel && confirmDialog.modelId) {
-                seatModelScreen.viewModel.confirmSwitch(confirmDialog.modelId);
             }
         }
     }
@@ -85,7 +85,7 @@ Rectangle {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: addDialog.open()
+                    onClicked: addDialog.prepareAndOpen()
                 }
             }
         }
@@ -150,12 +150,11 @@ Rectangle {
                             }
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: {
-                                    editDialog.modelId = modelData.id;
-                                    editDialog.nameField = modelData.display_name || "";
-                                    editDialog.descField = modelData.description || "";
-                                    editDialog.open();
-                                }
+                                onClicked: editDialog.prepareAndOpen(
+                                    modelData.id,
+                                    modelData.display_name || "",
+                                    modelData.description || ""
+                                )
                             }
                         }
                         Rectangle {
@@ -199,11 +198,22 @@ Rectangle {
     IndustrialDialog {
         id: addDialog
         title: qsTr("新增座椅型号")
-        dialogContentHeight: 210
         acceptText: qsTr("创建")
+        onAccepted: {
+            seatModelScreen.viewModel.createModel(addIdInput.text, addNameInput.text, addDescInput.text);
+        }
 
-        dialogContent: ColumnLayout {
-            spacing: 14
+        function prepareAndOpen() {
+            addIdInput.text = "";
+            addNameInput.text = "";
+            addDescInput.text = "";
+            open();
+            addIdInput.forceActiveFocus();
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
 
             ColumnLayout {
                 spacing: 4
@@ -247,7 +257,6 @@ Rectangle {
                     }
                 }
             }
-
             ColumnLayout {
                 spacing: 4
                 Layout.fillWidth: true
@@ -267,7 +276,6 @@ Rectangle {
                         color: addNameInput.activeFocus ? Theme.accent : Theme.cardGlassBorder
                     }
                     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-
                     TextInput {
                         id: addNameInput
                         anchors.fill: parent
@@ -290,7 +298,6 @@ Rectangle {
                     }
                 }
             }
-
             ColumnLayout {
                 spacing: 4
                 Layout.fillWidth: true
@@ -310,7 +317,6 @@ Rectangle {
                         color: addDescInput.activeFocus ? Theme.accent : Theme.cardGlassBorder
                     }
                     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-
                     TextInput {
                         id: addDescInput
                         anchors.fill: parent
@@ -334,28 +340,28 @@ Rectangle {
                 }
             }
         }
-        onAccepted: {
-            seatModelScreen.viewModel.createModel(addIdInput.text, addNameInput.text, addDescInput.text);
-        }
-        onOpened: {
-            addIdInput.text = "";
-            addNameInput.text = "";
-            addDescInput.text = "";
-            addIdInput.forceActiveFocus();
-        }
     }
 
     IndustrialDialog {
         id: editDialog
         property string modelId: ""
-        property string nameField: ""
-        property string descField: ""
         title: qsTr("编辑型号")
-        dialogContentHeight: 160
         acceptText: qsTr("保存")
+        onAccepted: {
+            seatModelScreen.viewModel.updateModel(editDialog.modelId, editNameInput.text, editDescInput.text);
+        }
 
-        dialogContent: ColumnLayout {
-            spacing: 14
+        function prepareAndOpen(modelId, name, desc) {
+            editDialog.modelId = modelId;
+            editNameInput.text = name || "";
+            editDescInput.text = desc || "";
+            open();
+            editNameInput.forceActiveFocus();
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
 
             ColumnLayout {
                 spacing: 4
@@ -376,7 +382,6 @@ Rectangle {
                         color: editNameInput.activeFocus ? Theme.accent : Theme.cardGlassBorder
                     }
                     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-
                     TextInput {
                         id: editNameInput
                         anchors.fill: parent
@@ -390,7 +395,6 @@ Rectangle {
                     }
                 }
             }
-
             ColumnLayout {
                 spacing: 4
                 Layout.fillWidth: true
@@ -410,7 +414,6 @@ Rectangle {
                         color: editDescInput.activeFocus ? Theme.accent : Theme.cardGlassBorder
                     }
                     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-
                     TextInput {
                         id: editDescInput
                         anchors.fill: parent
@@ -424,14 +427,6 @@ Rectangle {
                     }
                 }
             }
-        }
-        onAccepted: {
-            seatModelScreen.viewModel.updateModel(editDialog.modelId, editNameInput.text, editDescInput.text);
-        }
-        onOpened: {
-            editNameInput.text = editDialog.nameField;
-            editDescInput.text = editDialog.descField;
-            editNameInput.forceActiveFocus();
         }
     }
 }

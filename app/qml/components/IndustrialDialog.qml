@@ -1,166 +1,174 @@
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import styles
 
-/*
-  Industrial-grade modal dialog -- dark glass, backdrop overlay,
-  subtle shadow, animated entrance, large touch-friendly buttons.
-  Usage:
-
-    IndustrialDialog {
-        id: myDialog
-        title: "新增记录"
-        contentHeight: 200
-        onAccepted: { ... handle confirm ... }
-        // Content goes inside:
-        contentItem: ColumnLayout { ... }
-    }
-*/
-Popup {
+Rectangle {
     id: root
 
-    modal: true
-    closePolicy: Popup.CloseOnEscape
-    anchors.centerIn: Overlay.overlay
-    padding: 0
+    anchors.fill: parent
+    color: Qt.rgba(0, 0, 0, 0.58)
+    visible: false
+    z: 998
 
-    // ── Public API ──
     property string title: ""
-    property real dialogContentHeight: 160
+    property alias dialogContentHeight: contentSlot.implicitHeight
     property string acceptText: qsTr("确认")
     property string cancelText: qsTr("取消")
     property bool showCancel: true
-    property alias dialogContent: contentLoader.sourceComponent
+    default property alias dialogContent: contentSlot.data
 
     signal accepted()
     signal rejected()
 
-    // ── Backdrop overlay ──
-    parent: Overlay.overlay
+    function open() {
+        root.visible = true;
+        fadeIn.start();
+    }
+    function close() {
+        fadeOut.start();
+    }
 
-    Rectangle {
-        id: backdrop
+    // Prevent clicks through to background
+    MouseArea {
         anchors.fill: parent
-        color: Qt.rgba(0, 0, 0, 0.55)
-        z: root.z - 1
+        enabled: root.visible
+        onClicked: { /* block clicks */ }
     }
 
-    // ── Enter animation ──
-    enter: Transition {
-        ParallelAnimation {
-            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animNormal; easing.type: Easing.OutCubic }
-            NumberAnimation { property: "scale"; from: 0.96; to: 1.0; duration: Theme.animNormal; easing.type: Easing.OutCubic }
-        }
+    OpacityAnimator {
+        id: fadeIn
+        target: root
+        from: 0; to: 1
+        duration: Theme.animNormal
+        easing.type: Easing.OutCubic
+        onStopped: root.opacity = 1
+    }
+    OpacityAnimator {
+        id: fadeOut
+        target: root
+        from: 1; to: 0
+        duration: Theme.animFast
+        onStopped: { root.visible = false; root.opacity = 1; }
     }
 
-    exit: Transition {
-        NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.animFast }
+    // ── Shadow layer ──
+    Rectangle {
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: 2
+        width: card.width + 16
+        height: card.height + 16
+        radius: Theme.radiusLG + 4
+        color: Qt.rgba(0, 0, 0, 0.3)
+        opacity: root.opacity
     }
 
-    // ── Dialog body ──
-    background: Rectangle {
-        id: dialogBody
+    // ── Card ──
+    Rectangle {
+        id: card
         width: 440
-        implicitWidth: 440
-        implicitHeight: 52 + 1 + root.dialogContentHeight + Theme.spacingLG * 2 + 1 + 56
-        color: Theme.bgSecondary
+        anchors.centerIn: parent
         radius: Theme.radiusLG
-        border { width: 1; color: Qt.rgba(1, 1, 1, 0.12) }
+        color: "#1a1e26"
+        border { width: 1; color: Qt.rgba(1, 1, 1, 0.1) }
 
-        // Subtle top accent line
+        // Card inner gradient overlay
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.03) }
+                GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.02) }
+            }
+        }
+
+        // Top accent bar
         Rectangle {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: 2
+            height: 3
             radius: Theme.radiusLG
-            color: Theme.accent
-            Rectangle {
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: 1
-                color: Theme.bgSecondary
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: Theme.accent }
+                GradientStop { position: 1.0; color: Qt.rgba(0.345, 0.651, 1, 0.5) }
             }
         }
 
         ColumnLayout {
             anchors.fill: parent
+            anchors.topMargin: 3
             spacing: 0
 
             // ── Header ──
-            Rectangle {
+            Item {
                 id: headerRow
                 Layout.fillWidth: true
-                Layout.preferredHeight: 52
-                color: "transparent"
+                Layout.preferredHeight: 50
+                Layout.leftMargin: Theme.spacingLG
+                Layout.rightMargin: Theme.spacingLG
 
                 Text {
                     anchors.left: parent.left
-                    anchors.leftMargin: Theme.spacingLG
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.title
                     color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeMD
+                    font.pixelSize: 15
                     font.weight: Font.DemiBold
                 }
             }
 
-            // ── Separator ──
             Rectangle {
-                id: separator
+                id: sep1
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
-                color: Qt.rgba(1, 1, 1, 0.06)
-            }
-
-            // ── Content area ──
-            Item {
-                id: contentArea
-                Layout.fillWidth: true
-                Layout.preferredHeight: root.dialogContentHeight
                 Layout.leftMargin: Theme.spacingLG
                 Layout.rightMargin: Theme.spacingLG
-                Layout.topMargin: Theme.spacingLG
-                Layout.bottomMargin: Theme.spacingLG
-
-                Loader {
-                    id: contentLoader
-                    anchors.fill: parent
-                }
+                color: Qt.rgba(1, 1, 1, 0.05)
             }
 
-            // ── Separator ──
+            // ── Content ──
+            Item {
+                id: contentSlot
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.max(implicitHeight, 80)
+                Layout.leftMargin: Theme.spacingLG
+                Layout.rightMargin: Theme.spacingLG
+                Layout.topMargin: Theme.spacingMD
+                Layout.bottomMargin: Theme.spacingMD
+            }
+
             Rectangle {
+                id: sep2
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
-                color: Qt.rgba(1, 1, 1, 0.06)
+                Layout.leftMargin: Theme.spacingLG
+                Layout.rightMargin: Theme.spacingLG
+                color: Qt.rgba(1, 1, 1, 0.05)
             }
 
-            // ── Footer (buttons) ──
-            Rectangle {
+            // ── Footer ──
+            Item {
                 id: footerRow
                 Layout.fillWidth: true
-                Layout.preferredHeight: 56
-                color: "transparent"
+                Layout.preferredHeight: 52
+                Layout.leftMargin: Theme.spacingLG
+                Layout.rightMargin: Theme.spacingMD
 
                 RowLayout {
                     anchors.right: parent.right
-                    anchors.rightMargin: Theme.spacingMD
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: Theme.spacingSM
+                    spacing: 10
 
-                    // Cancel button
+                    // Cancel
                     Rectangle {
                         visible: root.showCancel
-                        Layout.preferredWidth: 88
-                        Layout.preferredHeight: 40
-                        radius: Theme.radiusSM
+                        implicitWidth: 90
+                        implicitHeight: 36
+                        radius: 4
                         color: cancelMouse.containsMouse
-                               ? Qt.rgba(1, 1, 1, 0.08)
+                               ? Qt.rgba(1, 1, 1, 0.06)
                                : "transparent"
-                        border { width: 1; color: Qt.rgba(1, 1, 1, 0.12) }
+                        border { width: 1; color: Qt.rgba(1, 1, 1, 0.15) }
 
                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
@@ -176,31 +184,28 @@ Popup {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                root.rejected();
-                                root.close();
-                            }
+                            onClicked: { root.rejected(); root.close(); }
                         }
                     }
 
-                    // Accept button
+                    // Accept
                     Rectangle {
-                        Layout.preferredWidth: 88
-                        Layout.preferredHeight: 40
-                        radius: Theme.radiusSM
+                        implicitWidth: 90
+                        implicitHeight: 36
+                        radius: 4
                         color: acceptMouse.containsMouse
-                               ? Theme.accentGreen
-                               : Theme.accentGreenDim
+                               ? "#4169e1"
+                               : Theme.accent
                         border { width: 1; color: acceptMouse.containsMouse
-                                         ? Theme.accentGreen
-                                         : Theme.accentGreen }
+                                         ? "#4169e1"
+                                         : Theme.accent }
 
                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
                         Text {
                             anchors.centerIn: parent
                             text: root.acceptText
-                            color: acceptMouse.containsMouse ? "#000000" : Theme.accentGreen
+                            color: "#ffffff"
                             font.pixelSize: Theme.fontSizeSM
                             font.weight: Font.DemiBold
                         }
@@ -210,10 +215,7 @@ Popup {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                root.accepted();
-                                root.close();
-                            }
+                            onClicked: { root.accepted(); root.close(); }
                         }
                     }
                 }
