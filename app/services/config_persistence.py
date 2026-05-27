@@ -15,6 +15,53 @@ class ConfigPersistenceService:
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
 
+    def migrate_from_json(self, json_path: str) -> None:
+        """首次启动：从 config.json 迁移 cameras 到 SQLite，并导入 K-V 配置。"""
+        if not Path(json_path).exists():
+            return
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Seed a default seat model if none exist
+        with self._get_conn() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM seat_models").fetchone()[0]
+            if count == 0:
+                conn.execute(
+                    "INSERT INTO seat_models (id, display_name, description, is_default, created_at, updated_at) "
+                    "VALUES (?, ?, ?, 1, ?, ?)",
+                    ("default", "默认型号", "从 config.json 自动迁移", now, now),
+                )
+                conn.commit()
+
+        # Migrate cameras
+        cameras = data.get("cameras", [])
+        existing = {c["camera_id"] for c in self.list_cameras()}
+        for idx, cam in enumerate(cameras):
+            cid = cam.get("camera_id", "")
+            if not cid or cid in existing:
+                continue
+            fc = cam.get("filter_classifier", {})
+            cal = cam.get("calibration", {})
+            self.create_camera({
+                "camera_id": cid,
+                "seat_model_id": "default",
+                "type": cam.get("type", "mvs"),
+                "source": cam.get("source", ""),
+                "enabled": 1 if cam.get("enabled", True) else 0,
+                "efficientad_model_path": cam.get("efficientad_model_path", ""),
+                "filter_classifier_path": fc.get("model_path", ""),
+                "filter_classifier_enabled": 1 if fc.get("enabled") else 0,
+                "calibration_normalizer": cal.get("normalizer_path", ""),
+                "calibration_projector": cal.get("projector_path", ""),
+                "display_order": idx,
+            })
+
+        # Migrate K-V config
+        self.sync_json_to_db(json_path)
+
     def _get_conn(self) -> sqlite3.Connection:
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self._db_path)
