@@ -192,33 +192,109 @@ Rectangle {
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
         anchors.centerIn: parent
-        width: 400
+        width: 420
+        padding: Theme.spacingLG
+
+        background: Rectangle {
+            color: Theme.bgSecondary
+            radius: Theme.radiusLG
+            border { width: 1; color: Theme.borderStrong }
+        }
+
+        header: Text {
+            text: qsTr("新增座椅型号")
+            color: Theme.textPrimary
+            font.pixelSize: Theme.fontSizeMD
+            font.bold: true
+            padding: Theme.spacingMD
+        }
+
         ColumnLayout {
-            spacing: Theme.spacingSM
+            spacing: Theme.spacingMD
             Layout.fillWidth: true
-            Text { text: qsTr("型号 ID:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
-            TextField {
-                id: addIdField
-                Layout.fillWidth: true
-                placeholderText: "seat_model_001"
-                color: Theme.textPrimary
+
+            Text {
+                text: qsTr("型号 ID:")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeXS
             }
-            Text { text: qsTr("显示名称:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
-            TextField {
-                id: addNameField
+            Rectangle {
                 Layout.fillWidth: true
-                placeholderText: qsTr("座椅型号A")
-                color: Theme.textPrimary
+                implicitHeight: 38
+                color: Theme.cardGlass
+                radius: Theme.radiusSM
+                border { width: 1; color: Theme.cardGlassBorder }
+                TextInput {
+                    id: addIdField
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    activeFocusOnPress: true
+                    selectByMouse: true
+                }
             }
-            Text { text: qsTr("描述:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
-            TextField {
-                id: addDescField
+
+            Text {
+                text: qsTr("显示名称:")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeXS
+            }
+            Rectangle {
                 Layout.fillWidth: true
-                color: Theme.textPrimary
+                implicitHeight: 38
+                color: Theme.cardGlass
+                radius: Theme.radiusSM
+                border { width: 1; color: Theme.cardGlassBorder }
+                TextInput {
+                    id: addNameField
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    activeFocusOnPress: true
+                    selectByMouse: true
+                }
             }
+
+            Text {
+                text: qsTr("描述:")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeXS
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 38
+                color: Theme.cardGlass
+                radius: Theme.radiusSM
+                border { width: 1; color: Theme.cardGlassBorder }
+                TextInput {
+                    id: addDescField
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    activeFocusOnPress: true
+                    selectByMouse: true
+                }
+            }
+
+            Item { height: Theme.spacingSM; width: 1 }
         }
         onAccepted: {
             seatModelScreen.viewModel.createModel(addIdField.text, addNameField.text, addDescField.text);
+        }
+        onOpened: {
+            addIdField.text = "";
+            addNameField.text = "";
+            addDescField.text = "";
+            addIdField.forceActiveFocus();
         }
     }
 
@@ -231,27 +307,84 @@ Rectangle {
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
         anchors.centerIn: parent
-        width: 400
+        width: 420
+        padding: Theme.spacingLG
+
+        background: Rectangle {
+            color: Theme.bgSecondary
+            radius: Theme.radiusLG
+            border { width: 1; color: Theme.borderStrong }
+        }
+
+        header: Text {
+            text: qsTr("编辑型号")
+            color: Theme.textPrimary
+            font.pixelSize: Theme.fontSizeMD
+            font.bold: true
+            padding: Theme.spacingMD
+        }
+
         ColumnLayout {
-            spacing: Theme.spacingSM
+            spacing: Theme.spacingMD
             Layout.fillWidth: true
-            Text { text: qsTr("显示名称:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
-            TextField {
-                id: editNameField
-                Layout.fillWidth: true
-                text: editDialog.nameField
-                color: Theme.textPrimary
+
+            Text {
+                text: qsTr("显示名称:")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeXS
             }
-            Text { text: qsTr("描述:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
-            TextField {
-                id: editDescField
+            Rectangle {
                 Layout.fillWidth: true
-                text: editDialog.descField
-                color: Theme.textPrimary
+                implicitHeight: 38
+                color: Theme.cardGlass
+                radius: Theme.radiusSM
+                border { width: 1; color: Theme.cardGlassBorder }
+                TextInput {
+                    id: editNameField
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    activeFocusOnPress: true
+                    selectByMouse: true
+                }
             }
+
+            Text {
+                text: qsTr("描述:")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeXS
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 38
+                color: Theme.cardGlass
+                radius: Theme.radiusSM
+                border { width: 1; color: Theme.cardGlassBorder }
+                TextInput {
+                    id: editDescField
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    activeFocusOnPress: true
+                    selectByMouse: true
+                }
+            }
+
+            Item { height: Theme.spacingSM; width: 1 }
         }
         onAccepted: {
             seatModelScreen.viewModel.updateModel(editDialog.modelId, editNameField.text, editDescField.text);
+        }
+        onOpened: {
+            editNameField.text = editDialog.nameField;
+            editDescField.text = editDialog.descField;
+            editNameField.forceActiveFocus();
         }
     }
 }

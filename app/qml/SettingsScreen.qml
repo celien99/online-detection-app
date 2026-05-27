@@ -159,9 +159,11 @@ Rectangle {
 
         implicitHeight: 36
         implicitWidth: 280
-        color: Theme.cardGlass
+        color: comboMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.06) : Theme.cardGlass
         radius: Theme.radiusSM
-        border { width: 1; color: Theme.cardGlassBorder }
+        border { width: 1; color: comboPopup.visible ? Theme.accent : Theme.cardGlassBorder }
+
+        Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
         function displayTextFor(val) {
             if (comboRoot.values.length > 0) {
@@ -184,10 +186,10 @@ Rectangle {
         }
 
         Text {
-            id: displayText
+            id: comboDisplayText
             anchors.left: parent.left
-            anchors.leftMargin: 8
-            anchors.right: arrow.left
+            anchors.leftMargin: 10
+            anchors.right: comboArrow.left
             anchors.rightMargin: 4
             anchors.verticalCenter: parent.verticalCenter
             text: comboRoot.displayTextFor(comboRoot.currentValue)
@@ -197,49 +199,72 @@ Rectangle {
         }
 
         Text {
-            id: arrow
+            id: comboArrow
             anchors.right: parent.right
-            anchors.rightMargin: 8
+            anchors.rightMargin: 10
             anchors.verticalCenter: parent.verticalCenter
-            text: "▼"
-            color: Theme.textSecondary
-            font.pixelSize: 10
+            text: comboPopup.visible ? "▲" : "▼"
+            color: comboPopup.visible ? Theme.accent : Theme.textSecondary
+            font.pixelSize: 9
         }
 
         MouseArea {
+            id: comboMouse
             anchors.fill: parent
+            hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: comboPopup.open()
+            onClicked: {
+                if (comboPopup.visible) {
+                    comboPopup.close();
+                } else {
+                    comboPopup.open();
+                }
+            }
         }
 
         Popup {
             id: comboPopup
-            y: parent.height + 2
-            width: parent.width
-            padding: 0
+            y: parent.height + 4
+            x: 0
+            width: Math.max(parent.width, 200)
+            padding: 4
+            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
             background: Rectangle {
-                color: Theme.bgTertiary
-                radius: Theme.radiusSM
-                border { width: 1; color: Theme.borderDefault }
+                color: Theme.bgSecondary
+                radius: Theme.radiusMD
+                border { width: 1; color: Theme.accent }
+
+                layer.enabled: true
+                layer.effect: null
             }
 
             contentItem: ColumnLayout {
-                spacing: 0
+                spacing: 2
                 Repeater {
                     model: comboRoot.items
                     delegate: Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 32
-                        color: hoverHandler.containsMouse ? Theme.bgSecondary : "transparent"
+                        implicitHeight: 34
+                        radius: Theme.radiusSM
+                        color: {
+                            if (comboRoot.actualFor(modelData) === comboRoot.currentValue)
+                                return Theme.accentDim;
+                            if (hoverHandler.containsMouse)
+                                return Qt.rgba(1, 1, 1, 0.06);
+                            return "transparent";
+                        }
+
+                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
                         Text {
                             anchors.left: parent.left
-                            anchors.leftMargin: 8
+                            anchors.leftMargin: 12
                             anchors.verticalCenter: parent.verticalCenter
                             text: modelData
-                            color: Theme.textPrimary
+                            color: comboRoot.actualFor(modelData) === comboRoot.currentValue ? Theme.accent : Theme.textPrimary
                             font.pixelSize: Theme.fontSizeSM
+                            font.bold: comboRoot.actualFor(modelData) === comboRoot.currentValue
                         }
 
                         MouseArea {
@@ -275,7 +300,10 @@ Rectangle {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 0
+                anchors.leftMargin: Theme.spacingSM
+                anchors.rightMargin: Theme.spacingSM
+                anchors.topMargin: Theme.spacingSM
+                anchors.bottomMargin: Theme.spacingSM
                 spacing: 0
 
                 Text {
@@ -283,7 +311,9 @@ Rectangle {
                     color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeMD
                     font.bold: true
-                    Layout.margins: Theme.spacingMD
+                    Layout.leftMargin: Theme.spacingSM
+                    Layout.topMargin: Theme.spacingSM
+                    Layout.bottomMargin: Theme.spacingSM
                 }
 
                 ListView {
@@ -302,20 +332,23 @@ Rectangle {
                     currentIndex: settingsScreen.selectedIndex
 
                     delegate: Rectangle {
-                        width: navList.width
+                        width: navList.width - 8
                         height: 44
                         color: index === navList.currentIndex ? Theme.bgTertiary : "transparent"
+                        radius: Theme.radiusSM
 
                         Rectangle {
                             visible: index === navList.currentIndex
-                            width: 3; height: parent.height
+                            width: 3; height: 22
+                            anchors.verticalCenter: parent.verticalCenter
                             color: Theme.accent
+                            radius: 1.5
                         }
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: parent.left
-                            anchors.leftMargin: Theme.spacingLG
+                            anchors.leftMargin: Theme.spacingMD + Theme.spacingXS
                             text: modelData
                             color: index === navList.currentIndex ? Theme.textPrimary : Theme.textSecondary
                             font.pixelSize: Theme.fontSizeSM
@@ -324,6 +357,7 @@ Rectangle {
 
                         MouseArea {
                             anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
                             onClicked: settingsScreen.selectedIndex = index
                         }
                     }
@@ -345,13 +379,17 @@ Rectangle {
                 Flickable {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    Layout.leftMargin: Theme.spacingLG
+                    Layout.rightMargin: Theme.spacingLG
+                    Layout.topMargin: Theme.spacingLG
+                    Layout.bottomMargin: 0
                     contentHeight: contentColumn.implicitHeight + Theme.spacingLG
                     clip: true
                     ScrollBar.vertical: ScrollBar {}
 
                     ColumnLayout {
                         id: contentColumn
-                        width: parent.width - 20
+                        width: parent.width
                         spacing: Theme.spacingMD
 
                         // ── Section header ──
