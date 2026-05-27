@@ -55,4 +55,24 @@ QtObject {
     // ── Touch ──
     readonly property int touchMin: 48
     readonly property int touchComfort: 56
+
+    // ── Accent variants ──
+    readonly property color accentGreen: "#00ff88"
+    readonly property color accentGreenDim: Qt.rgba(0, 1, 0.533, 0.15)
+    readonly property color accentGreenGradient: "#00cc6a"
+
+    // ── Animation ──
+    readonly property int animFast: 150
+    readonly property int animNormal: 200
+    readonly property int animSlow: 300
+    readonly property int animToast: 3000
+
+    // ── Elevation ──
+    readonly property real elevationLow: 0.08
+    readonly property real elevationMid: 0.15
+    readonly property real elevationHigh: 0.25
+
+    // ── Card ──
+    readonly property color cardGlass: Qt.rgba(1, 1, 1, 0.04)
+    readonly property color cardGlassBorder: Qt.rgba(1, 1, 1, 0.08)
 }
