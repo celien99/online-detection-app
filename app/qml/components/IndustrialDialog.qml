@@ -6,6 +6,7 @@ Rectangle {
     id: root
 
     width: 440
+    height: Math.max(160, innerLayout.implicitHeight + 3)
     anchors.centerIn: parent
     visible: false
     z: 998
@@ -17,7 +18,7 @@ Rectangle {
     property string acceptText: qsTr("确认")
     property string cancelText: qsTr("取消")
     property bool showCancel: true
-    default property alias dialogContent: contentSlot.data
+    default property alias dialogContent: contentCol.data
 
     signal accepted()
     signal rejected()
@@ -46,14 +47,9 @@ Rectangle {
         onStopped: { root.visible = false; root.opacity = 1; }
     }
 
-    // Card inner highlight
-    Rectangle {
-        anchors.fill: parent
-        radius: parent.radius
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.04) }
-            GradientStop { position: 0.6; color: "transparent" }
-        }
+    gradient: Gradient {
+        GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.04) }
+        GradientStop { position: 0.6; color: "transparent" }
     }
 
     // Top accent bar
@@ -61,8 +57,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 3
-        radius: 14
+        height: 3; radius: 14
         gradient: Gradient {
             GradientStop { position: 0.0; color: Theme.accent }
             GradientStop { position: 1.0; color: Qt.rgba(0.345, 0.651, 1, 0.5) }
@@ -70,16 +65,16 @@ Rectangle {
     }
 
     ColumnLayout {
+        id: innerLayout
         anchors.fill: parent
         anchors.topMargin: 3
         spacing: 0
 
+        // ── Header row ──
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 48
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
-
+            Layout.leftMargin: 20; Layout.rightMargin: 20
             Text {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
@@ -91,35 +86,30 @@ Rectangle {
         }
 
         Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 1
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
+            Layout.fillWidth: true; Layout.preferredHeight: 1
+            Layout.leftMargin: 20; Layout.rightMargin: 20
             color: Qt.rgba(1, 1, 1, 0.06)
         }
 
-        Item {
-            id: contentSlot
+        // ── Content area ──
+        ColumnLayout {
+            id: contentCol
             Layout.fillWidth: true
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
-            Layout.topMargin: 14
-            Layout.bottomMargin: 14
+            Layout.leftMargin: 20; Layout.rightMargin: 20
+            Layout.topMargin: 14; Layout.bottomMargin: 14
+            spacing: 12
         }
 
         Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 1
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
+            Layout.fillWidth: true; Layout.preferredHeight: 1
+            Layout.leftMargin: 20; Layout.rightMargin: 20
             color: Qt.rgba(1, 1, 1, 0.06)
         }
 
+        // ── Footer ──
         Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 52
-            Layout.leftMargin: 20
-            Layout.rightMargin: 14
+            Layout.fillWidth: true; Layout.preferredHeight: 52
+            Layout.leftMargin: 20; Layout.rightMargin: 14
 
             RowLayout {
                 anchors.right: parent.right
@@ -128,42 +118,31 @@ Rectangle {
 
                 Rectangle {
                     visible: root.showCancel
-                    implicitWidth: 88
-                    implicitHeight: 34
-                    radius: 6
+                    implicitWidth: 88; implicitHeight: 34; radius: 6
                     color: cancelMouse.containsMouse
                            ? Qt.rgba(1, 1, 1, 0.08)
                            : "transparent"
                     border { width: 1; color: Qt.rgba(1, 1, 1, 0.15) }
-
                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
-
                     Text {
                         anchors.centerIn: parent
                         text: root.cancelText
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSizeSM
                     }
-
                     MouseArea {
                         id: cancelMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
+                        anchors.fill: parent; hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: { root.rejected(); root.close(); }
                     }
                 }
 
                 Rectangle {
-                    implicitWidth: 88
-                    implicitHeight: 34
-                    radius: 6
+                    implicitWidth: 88; implicitHeight: 34; radius: 6
                     color: acceptMouse.containsMouse
-                           ? "#4169e1"
-                           : Theme.accent
-
+                           ? "#4169e1" : Theme.accent
                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
-
                     Text {
                         anchors.centerIn: parent
                         text: root.acceptText
@@ -171,11 +150,9 @@ Rectangle {
                         font.pixelSize: Theme.fontSizeSM
                         font.weight: Font.DemiBold
                     }
-
                     MouseArea {
                         id: acceptMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
+                        anchors.fill: parent; hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: { root.accepted(); root.close(); }
                     }

@@ -36,11 +36,11 @@ Rectangle {
         }
 
         ColumnLayout {
-            anchors.fill: parent
-            spacing: 6
+            Layout.fillWidth: true
+            spacing: 4
             Text {
                 Layout.fillWidth: true
-                text: qsTr("切换型号将重新加载检测引擎，\n当前检测任务会被中断。")
+                text: qsTr("切换型号将重新加载检测引擎，当前检测任务会被中断。")
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSizeSM
                 wrapMode: Text.Wrap
@@ -212,8 +212,8 @@ Rectangle {
         }
 
         ColumnLayout {
-            anchors.fill: parent
-            spacing: 12
+            Layout.fillWidth: true
+            spacing: 8
 
             ColumnLayout {
                 spacing: 4
@@ -360,8 +360,8 @@ Rectangle {
         }
 
         ColumnLayout {
-            anchors.fill: parent
-            spacing: 12
+            Layout.fillWidth: true
+            spacing: 8
 
             ColumnLayout {
                 spacing: 4
