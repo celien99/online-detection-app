@@ -55,7 +55,7 @@ Rectangle {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: fileDialog.open()
+                    onClicked: importDialog.open()
                 }
             }
             Rectangle {
@@ -231,13 +231,147 @@ Rectangle {
         }
     }
 
+    IndustrialDialog {
+        id: importDialog
+        title: qsTr("导入模型文件")
+        acceptText: qsTr("选择文件")
+        showCancel: true
+        onAccepted: fileDialog.open()
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("相机 ID")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeXS
+                font.weight: Font.Medium
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 38
+                color: importCamInput.activeFocus ? Qt.rgba(1, 1, 1, 0.06) : Theme.cardGlass
+                radius: Theme.radiusSM
+                border { width: 1; color: importCamInput.activeFocus ? Theme.accent : Theme.cardGlassBorder }
+                Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+                TextInput {
+                    id: importCamInput
+                    anchors.fill: parent
+                    anchors.leftMargin: 12; anchors.rightMargin: 12
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    activeFocusOnPress: true
+                    selectByMouse: true
+                    text: "cam_front"
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("模型类型")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeXS
+                font.weight: Font.Medium
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 38
+                color: Theme.cardGlass
+                radius: Theme.radiusSM
+                border { width: 1; color: Theme.cardGlassBorder }
+
+                Text {
+                    id: importTypeLabel
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: importTypeCombo.currentText
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                }
+                Text {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "▼"
+                    color: Theme.textSecondary
+                    font.pixelSize: 9
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: importTypePopup.open()
+                }
+                Popup {
+                    id: importTypePopup
+                    y: parent.height + 4
+                    x: 0
+                    width: parent.width
+                    padding: 4
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                    background: Rectangle {
+                        color: Theme.bgSecondary
+                        radius: Theme.radiusMD
+                        border { width: 1; color: Theme.accent }
+                    }
+                    contentItem: ColumnLayout {
+                        spacing: 2
+                        Repeater {
+                            model: ["efficientad", "filter_classifier", "calibration_normalizer", "calibration_projector"]
+                            delegate: Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: 34
+                                radius: Theme.radiusSM
+                                color: importTypeCombo.currentIndex === index ? Theme.accentDim
+                                       : (hoverHandler.containsMouse ? Qt.rgba(1, 1, 1, 0.06) : "transparent")
+                                Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 12
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: modelData
+                                    color: importTypeCombo.currentIndex === index ? Theme.accent : Theme.textPrimary
+                                    font.pixelSize: Theme.fontSizeSM
+                                    font.bold: importTypeCombo.currentIndex === index
+                                }
+                                MouseArea {
+                                    id: hoverHandler
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        importTypeCombo.currentIndex = index;
+                                        importTypePopup.close();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                ComboBox {
+                    id: importTypeCombo
+                    visible: false
+                    model: ["efficientad", "filter_classifier", "calibration_normalizer", "calibration_projector"]
+                    currentIndex: 0
+                }
+            }
+        }
+    }
+
     FileDialog {
         id: fileDialog
         title: qsTr("选择模型文件")
         nameFilters: [qsTr("Model files (*.pt *.pth *.onnx)"), qsTr("All files (*)")]
         onAccepted: {
             if (modelDeployScreen.viewModel && selectedFile) {
-                modelDeployScreen.viewModel.importModelFile("", "efficientad", String(selectedFile));
+                modelDeployScreen.viewModel.importModelFile(
+                    importCamInput.text || "cam_front",
+                    importTypeCombo.currentText,
+                    String(selectedFile)
+                );
             }
         }
     }
