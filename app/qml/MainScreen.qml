@@ -15,7 +15,6 @@ Rectangle {
         StatusBar {
             id: statusBar
             Layout.fillWidth: true
-            height: 40
             lineId: viewModel ? viewModel.lineId : ""
             systemStatus: viewModel ? viewModel.systemStatus : "stopped"
             okCount: viewModel ? viewModel.okCount : 0
@@ -24,11 +23,8 @@ Rectangle {
         }
 
         CameraGrid {
-            id: cameraGrid
             Layout.fillWidth: true
             Layout.fillHeight: true
-            columns: 2
-            rows: 2
         }
     }
 

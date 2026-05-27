@@ -119,6 +119,9 @@ def main(config_path: str | None = None) -> int:
     except Exception:
         pass
 
+    # ── Start camera watchdog ──
+    camera_manager.start_watchdog()
+
     # ── QML Application ──
     app = QGuiApplication(sys.argv)
     app.setApplicationDisplayName("座椅缺陷在线检测系统")
@@ -187,7 +190,18 @@ def main(config_path: str | None = None) -> int:
 
                 main_vm.update_from_result(response)
 
-            except Exception:
+            except Exception as exc:
+                # Fail-safe: treat inference failure as potential defect so no
+                # real defect escapes detection due to a pipeline error.
+                for cid in valid_frames:
+                    stats_collector.record(InspectionRecord(
+                        timestamp=time.time(),
+                        camera_id=cid,
+                        status="REJECT",
+                        reason="pipeline_failed",
+                    ))
+                plc.send_defect_signal(DefectSignal(camera_id="", severity=Severity.MINOR))
+                main_vm.update_stats_from_collector()
                 time.sleep(0.1)
 
     thread = threading.Thread(target=inspection_loop, daemon=True, name="inspection-loop")
@@ -202,6 +216,7 @@ def main(config_path: str | None = None) -> int:
     def cleanup() -> None:
         nonlocal running
         running = False
+        camera_manager.stop_watchdog()
         hot_reload.stop()
         camera_manager.disconnect_all()
         plc.disconnect()

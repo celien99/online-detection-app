@@ -1,29 +1,32 @@
 import QtQuick
+import QtQuick.Layouts
 
-Item {
+GridLayout {
     id: grid
 
-    property int columns: 2
-    property int rows: 2
-    property var cameraTiles: []
+    columns: 2
+    rows: 2
+    rowSpacing: 4
+    columnSpacing: 4
 
-    Grid {
-        anchors.fill: parent
-        columns: grid.columns
-        rows: grid.rows
-        spacing: 2
-
-        Repeater {
-            model: grid.cameraTiles
-
-            CameraTile {
-                width: grid.width / grid.columns - 2
-                height: grid.height / grid.rows - 2
-                cameraId: modelData.cameraId || ""
-                cameraStatus: modelData.status || "ok"
-                defectLabel: modelData.defectLabel || ""
-                live: modelData.live || false
-            }
-        }
+    CameraTile {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        cameraId: "camera_01"
+    }
+    CameraTile {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        cameraId: "camera_02"
+    }
+    CameraTile {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        cameraId: "camera_03"
+    }
+    CameraTile {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        cameraId: "camera_04"
     }
 }

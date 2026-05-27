@@ -8,8 +8,10 @@ Button {
     property color textColor: "#ffffff"
     property string buttonText: ""
 
-    implicitHeight: Math.max(48, implicitContentHeight + 16)
-    font.pixelSize: Theme.fontSizeMD
+    implicitHeight: Math.max(Theme.touchMin, implicitContentHeight + 20)
+
+    font.pixelSize: Theme.fontSizeSM
+    font.bold: true
 
     contentItem: Text {
         text: buttonText || control.text
@@ -20,9 +22,13 @@ Button {
     }
 
     background: Rectangle {
-        radius: 6
-        color: control.pressed ? Qt.darker(bgColor, 1.2)
-               : control.hovered ? Qt.lighter(bgColor, 1.1)
+        radius: Theme.radiusMD
+        color: control.pressed ? Qt.darker(bgColor, 1.15)
+               : control.hovered ? Qt.lighter(bgColor, 1.08)
                : bgColor
+        border {
+            width: 1
+            color: Qt.rgba(1, 1, 1, 0.08)
+        }
     }
 }

@@ -12,17 +12,18 @@ Rectangle {
     property int ngCount: 0
     property real tactRate: 0.0
 
-    height: 40
+    height: 52
     color: Theme.bgSecondary
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 12
-        anchors.rightMargin: 12
-        spacing: 12
+        anchors.leftMargin: Theme.spacingMD
+        anchors.rightMargin: Theme.spacingMD
+        spacing: Theme.spacingSM
 
+        // Status indicator
         Rectangle {
-            width: 12; height: 12; radius: 6
+            width: 14; height: 14; radius: 7
             color: {
                 switch (systemStatus) {
                     case "running": return Theme.statusOK;
@@ -31,52 +32,65 @@ Rectangle {
                 }
             }
         }
-
         Text {
-            text: systemStatus === "running" ? qsTr("运行中") :
-                  systemStatus === "paused" ? qsTr("已暂停") : qsTr("已停止")
+            text: {
+                switch (systemStatus) {
+                    case "running": return qsTr("Running");
+                    case "paused": return qsTr("Paused");
+                    default: return qsTr("Stopped");
+                }
+            }
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeSM
+            font.bold: true
+            Layout.rightMargin: Theme.spacingMD
         }
 
+        // Separator
+        Rectangle { width: 1; height: 28; color: Theme.borderStrong }
+
+        // Line info
         Text {
-            text: qsTr("产线 ") + lineId
+            text: qsTr("Line ") + lineId
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSizeSM
+            Layout.leftMargin: Theme.spacingMD
+            Layout.rightMargin: Theme.spacingMD
+            font.bold: true
         }
 
+        // Separator
+        Rectangle { width: 1; height: 28; color: Theme.borderStrong }
+
+        // Tact rate
         Text {
-            text: qsTr("节拍: ") + tactRate.toFixed(1) + qsTr("/min")
+            text: qsTr("Tact: ") + tactRate.toFixed(1) + "/min"
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSizeSM
+            Layout.leftMargin: Theme.spacingMD
+            Layout.rightMargin: Theme.spacingMD
         }
 
+        Rectangle { width: 1; height: 28; color: Theme.borderStrong }
+
+        // OK count
         Text {
-            text: qsTr("OK: ") + okCount
+            text: qsTr("OK  ") + okCount
             color: Theme.statusOK
             font.pixelSize: Theme.fontSizeMD
             font.bold: true
+            Layout.leftMargin: Theme.spacingMD
         }
 
+        // NG count
         Text {
-            text: qsTr("NG: ") + ngCount
+            text: qsTr("NG  ") + ngCount
             color: ngCount > 0 ? Theme.statusNG : Theme.textSecondary
             font.pixelSize: Theme.fontSizeMD
             font.bold: true
+            Layout.leftMargin: Theme.spacingSM
         }
 
         Item { Layout.fillWidth: true }
-
-        ActionButton {
-            implicitHeight: 32
-            buttonText: qsTr("⚙ 设置")
-            bgColor: Theme.bgTertiary
-        }
-
-        ActionButton {
-            implicitHeight: 32
-            buttonText: qsTr("📋 日志")
-            bgColor: Theme.bgTertiary
-        }
     }
 }

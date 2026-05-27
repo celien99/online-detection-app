@@ -6,15 +6,26 @@ Rectangle {
     property string badgeText: "OK"
     property string badgeStatus: "ok"
 
-    width: label.implicitWidth + 12
-    height: 22
-    radius: 3
+    width: label.implicitWidth + 14
+    height: 24
+    radius: Theme.radiusSM
     color: {
         switch (badgeStatus) {
-            case "ok": return Qt.rgba(0, 1, 0.53, 0.2);
-            case "ng": return Qt.rgba(1, 0.27, 0.27, 0.2);
-            case "warning": return Qt.rgba(1, 0.67, 0, 0.2);
+            case "ok": return Theme.statusOKDim;
+            case "ng": return Theme.statusNGDim;
+            case "warning": return Theme.statusWarningDim;
             default: return Qt.rgba(0.5, 0.5, 0.5, 0.2);
+        }
+    }
+    border {
+        width: 1
+        color: {
+            switch (badgeStatus) {
+                case "ok": return Qt.rgba(0.247, 0.725, 0.314, 0.4);
+                case "ng": return Qt.rgba(0.973, 0.318, 0.286, 0.4);
+                case "warning": return Qt.rgba(0.824, 0.6, 0.114, 0.4);
+                default: return Qt.rgba(0.5, 0.5, 0.5, 0.3);
+            }
         }
     }
 

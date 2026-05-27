@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import "components"
 import styles
 
@@ -11,50 +12,79 @@ Rectangle {
     property int ng: 0
     property real okRate: 0.0
 
-    Column {
+    ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 12
-        spacing: 12
+        anchors.margins: Theme.spacingLG
+        spacing: Theme.spacingLG
 
         Text {
-            text: qsTr("📊 统计报表")
+            text: qsTr("Statistics")
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeLG
             font.bold: true
         }
 
-        Row { spacing: 12
+        // KPI cards
+        RowLayout {
+            spacing: Theme.spacingMD
+
             InfoCard {
                 accentColor: Theme.statusOK
-                cardLabel: qsTr("今日 OK")
+                cardLabel: qsTr("OK Today")
                 cardValue: String(ok)
-                width: 160
+                Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.statusNG
-                cardLabel: qsTr("今日 NG")
+                cardLabel: qsTr("NG Today")
                 cardValue: String(ng)
-                width: 160
+                Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.accent
-                cardLabel: qsTr("OK 率")
+                cardLabel: qsTr("OK Rate")
                 cardValue: okRate.toFixed(1) + "%"
-                width: 160
+                Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.statusWarning
-                cardLabel: qsTr("Filter 抑制")
+                cardLabel: qsTr("Total")
+                cardValue: String(total)
+                Layout.fillWidth: true
+            }
+            InfoCard {
+                accentColor: Theme.textSecondary
+                cardLabel: qsTr("Filter Suppressed")
                 cardValue: String(total - ok - ng)
-                cardSubtext: "Filter Suppressed"
-                width: 160
+                cardSubtext: qsTr("false positive blocked")
+                Layout.fillWidth: true
             }
         }
 
-        Text {
-            text: qsTr("完整统计面板将在后续迭代中补充趋势图和缺陷分布图表")
-            color: Theme.textMuted
-            font.pixelSize: Theme.fontSizeSM
+        // Placeholder for charts
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: Theme.bgCard
+            radius: Theme.radiusMD
+            border { width: 1; color: Theme.borderDefault }
+
+            Column {
+                anchors.centerIn: parent
+                spacing: Theme.spacingSM
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: qsTr("Trend Charts & Defect Distribution")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeMD
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: qsTr("Charts will be available in a future update")
+                    color: Theme.textMuted
+                    font.pixelSize: Theme.fontSizeSM
+                }
+            }
         }
     }
 }

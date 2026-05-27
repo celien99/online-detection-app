@@ -8,14 +8,18 @@ Rectangle {
     property color accentColor: Theme.accent
 
     color: Theme.bgCard
-    radius: 4
-    border { width: 1; color: Qt.rgba(0.5, 0.5, 0.5, 0.15) }
+    radius: Theme.radiusMD
+    border {
+        width: 1
+        color: Theme.borderDefault
+    }
 
-    implicitHeight: 70
+    implicitWidth: 160
+    implicitHeight: 80
 
     Column {
         anchors.fill: parent
-        anchors.margins: 8
+        anchors.margins: Theme.spacingMD
         spacing: 2
 
         Text {

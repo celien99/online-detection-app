@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import "components"
 import styles
@@ -15,7 +16,7 @@ Rectangle {
     signal dismissFalseAlarm()
 
     anchors.fill: parent
-    color: Qt.rgba(0, 0, 0, 0.92)
+    color: Theme.bgOverlay
     z: 100
 
     Timer {
@@ -23,59 +24,90 @@ Rectangle {
         interval: 1000
         repeat: true
         running: overlay.visible
-        onTriggered: {
-            if (countdown > 0) countdown--;
-        }
+        onTriggered: { if (countdown > 0) countdown--; }
     }
 
-    Column {
+    ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 20
-        spacing: 12
+        anchors.margins: Theme.spacingXL
+        spacing: Theme.spacingLG
 
-        Row {
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 16
+        // ── Header ──
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingMD
 
             Rectangle {
+                Layout.preferredWidth: bannerText.implicitWidth + 40
+                Layout.preferredHeight: 48
+                radius: Theme.radiusMD
                 color: Theme.statusNG
-                radius: 4
-                height: 40
-                width: warningText.implicitWidth + 32
                 Text {
-                    id: warningText
+                    id: bannerText
                     anchors.centerIn: parent
-                    text: qsTr("⚠ DEFECT DETECTED")
+                    text: qsTr("DEFECT DETECTED")
                     color: "#ffffff"
                     font.pixelSize: Theme.fontSizeLG
                     font.bold: true
                 }
             }
-        }
 
-        Row {
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: parent.width * 0.85
-            height: parent.height * 0.5
-            spacing: 12
+            Item { Layout.fillWidth: true }
 
             Rectangle {
-                width: parent.width / 2 - 6
-                height: parent.height
-                color: Theme.bgCard
-                border { width: 1; color: "#333" }
+                Layout.preferredHeight: 48
+                Layout.preferredWidth: countdownLabel.implicitWidth + 32
+                radius: Theme.radiusMD
+                color: countdown <= 5 ? Theme.statusNGDim : Theme.bgTertiary
+                border {
+                    width: 1
+                    color: countdown <= 5 ? Theme.statusNG : Theme.borderStrong
+                }
+                Text {
+                    id: countdownLabel
+                    anchors.centerIn: parent
+                    text: qsTr("Auto-confirm in ") + countdown + "s"
+                    color: countdown <= 5 ? Theme.statusNG : Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeSM
+                    font.bold: true
+                }
+            }
+        }
 
-                Column {
+        // ── Body: images side by side ──
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: Theme.spacingMD
+
+            // Original image
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: Theme.bgCard
+                radius: Theme.radiusMD
+                border { width: 1; color: Theme.borderDefault }
+
+                ColumnLayout {
                     anchors.fill: parent
-                    Text {
-                        text: qsTr("📷 ") + cameraId + qsTr(" · 原始图像")
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSizeXS
-                        padding: 6
+                    spacing: 0
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 32
+                        color: Theme.bgTertiary
+                        radius: Theme.radiusMD
+                        Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: parent.radius; color: parent.color }
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Original  ") + cameraId
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontSizeXS
+                        }
                     }
                     Image {
-                        width: parent.width
-                        height: parent.height - 28
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.margins: 4
                         source: "image://camera/" + cameraId + "_original"
                         fillMode: Image.PreserveAspectFit
                         cache: false
@@ -83,23 +115,34 @@ Rectangle {
                 }
             }
 
+            // Heatmap
             Rectangle {
-                width: parent.width / 2 - 6
-                height: parent.height
+                Layout.fillWidth: true
+                Layout.fillHeight: true
                 color: Theme.bgCard
-                border { width: 1; color: "#333" }
+                radius: Theme.radiusMD
+                border { width: 1; color: Theme.borderDefault }
 
-                Column {
+                ColumnLayout {
                     anchors.fill: parent
-                    Text {
-                        text: qsTr("🔥 异常热力图 · Score: ") + confidence.toFixed(2)
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSizeXS
-                        padding: 6
+                    spacing: 0
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 32
+                        color: Theme.bgTertiary
+                        radius: Theme.radiusMD
+                        Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: parent.radius; color: parent.color }
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Heatmap  Score: ") + confidence.toFixed(4)
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontSizeXS
+                        }
                     }
                     Image {
-                        width: parent.width
-                        height: parent.height - 28
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.margins: 4
                         source: "image://camera/" + cameraId + "_heatmap"
                         fillMode: Image.PreserveAspectFit
                         cache: false
@@ -108,63 +151,68 @@ Rectangle {
             }
         }
 
-        Row {
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 8
+        // ── Info cards ──
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingMD
 
             InfoCard {
                 accentColor: Theme.statusNG
-                cardLabel: qsTr("缺陷类型")
-                cardValue: defectType
+                cardLabel: qsTr("Defect Type")
+                cardValue: defectType || "--"
+                Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.statusWarning
-                cardLabel: qsTr("置信度")
-                cardValue: confidence.toFixed(2)
+                cardLabel: qsTr("Confidence")
+                cardValue: confidence.toFixed(3)
+                Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.accent
-                cardLabel: qsTr("相机")
+                cardLabel: qsTr("Camera")
                 cardValue: cameraId
+                Layout.fillWidth: true
+            }
+            InfoCard {
+                accentColor: Theme.textSecondary
+                cardLabel: qsTr("Auto Action")
+                cardValue: "NG"
+                cardSubtext: qsTr("on timeout")
+                Layout.fillWidth: true
             }
         }
 
-        Row {
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 16
+        // ── Action buttons ──
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingLG
 
             ActionButton {
-                buttonText: qsTr("❌ 确认缺陷 (NG)")
+                buttonText: qsTr("Confirm NG")
                 bgColor: Theme.statusNG
-                implicitHeight: 56
-                implicitWidth: 220
-                font.pixelSize: Theme.fontSizeMD
+                Layout.fillWidth: true
+                implicitHeight: Theme.touchComfort
+                font { pixelSize: Theme.fontSizeMD; bold: true }
                 onClicked: overlay.confirmNG()
             }
             ActionButton {
-                buttonText: qsTr("🔍 标记需复核")
+                buttonText: qsTr("Mark for Review")
                 bgColor: Theme.statusWarning
                 textColor: "#000000"
-                implicitHeight: 56
-                implicitWidth: 220
-                font.pixelSize: Theme.fontSizeMD
+                Layout.fillWidth: true
+                implicitHeight: Theme.touchComfort
+                font { pixelSize: Theme.fontSizeMD; bold: true }
                 onClicked: overlay.markReview()
             }
             ActionButton {
-                buttonText: qsTr("✓ 误报放行 (OK)")
-                bgColor: "#444444"
-                implicitHeight: 56
-                implicitWidth: 220
-                font.pixelSize: Theme.fontSizeMD
+                buttonText: qsTr("Dismiss (False Alarm)")
+                bgColor: Theme.bgTertiary
+                Layout.fillWidth: true
+                implicitHeight: Theme.touchComfort
+                font { pixelSize: Theme.fontSizeMD; bold: true }
                 onClicked: overlay.dismissFalseAlarm()
             }
-        }
-
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("自动确认倒计时 ") + countdown + qsTr("s · 超时默认按 NG 处理")
-            color: Theme.textMuted
-            font.pixelSize: Theme.fontSizeXS
         }
     }
 }

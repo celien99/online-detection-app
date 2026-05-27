@@ -17,40 +17,142 @@ ApplicationWindow {
     property var statsViewModel: null
     property var settingsViewModel: null
 
-    footer: TabBar {
-        id: navBar
-        background: Rectangle { color: Theme.bgSecondary }
-        onCurrentIndexChanged: {
-            if (currentIndex === 1 && window.statsViewModel) window.statsViewModel.refresh();
-            if (currentIndex === 2 && window.logViewModel) window.logViewModel.refresh();
-        }
+    // ── Header ──
+    header: Rectangle {
+        height: 48
+        color: Theme.bgSecondary
 
-        TabButton {
-            id: monitorTab
-            text: qsTr("📷 监控")
-            contentItem: Text { text: monitorTab.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
-            background: Rectangle { color: monitorTab.checked ? Theme.bgTertiary : "transparent" }
-        }
-        TabButton {
-            id: statsTab
-            text: qsTr("📊 统计")
-            contentItem: Text { text: statsTab.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
-            background: Rectangle { color: statsTab.checked ? Theme.bgTertiary : "transparent" }
-        }
-        TabButton {
-            id: logTab
-            text: qsTr("📋 日志")
-            contentItem: Text { text: logTab.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
-            background: Rectangle { color: logTab.checked ? Theme.bgTertiary : "transparent" }
-        }
-        TabButton {
-            id: settingsTab
-            text: qsTr("⚙ 设置")
-            contentItem: Text { text: settingsTab.text; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
-            background: Rectangle { color: settingsTab.checked ? Theme.bgTertiary : "transparent" }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.spacingLG
+            anchors.rightMargin: Theme.spacingSM
+            spacing: 0
+
+            // App title
+            Text {
+                text: qsTr("Seat Defect Inspector")
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontSizeMD
+                font.bold: true
+            }
+            Rectangle {
+                width: 1; height: 24
+                color: Theme.borderStrong
+                Layout.leftMargin: Theme.spacingMD
+                Layout.rightMargin: Theme.spacingMD
+            }
+            Text {
+                text: qsTr("Line ") + (window.mainViewModel ? window.mainViewModel.lineId : "--")
+                color: Theme.accent
+                font.pixelSize: Theme.fontSizeSM
+            }
+
+            Item { Layout.fillWidth: true }
+
+            // Navigation tabs
+            TabBar {
+                id: navBar
+                background: null
+                Layout.preferredHeight: 48
+
+                onCurrentIndexChanged: {
+                    if (currentIndex === 1 && window.statsViewModel) window.statsViewModel.refresh();
+                    if (currentIndex === 2 && window.logViewModel) window.logViewModel.refresh();
+                }
+
+                TabButton {
+                    id: monitorTab
+                    text: qsTr("Monitor")
+                    implicitHeight: 48
+                    contentItem: Text {
+                        text: monitorTab.text
+                        color: monitorTab.checked ? Theme.accent : Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeSM
+                        font.bold: monitorTab.checked
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        color: "transparent"
+                        Rectangle {
+                            width: parent.width
+                            height: 2
+                            anchors.bottom: parent.bottom
+                            color: monitorTab.checked ? Theme.accent : "transparent"
+                        }
+                    }
+                }
+                TabButton {
+                    id: statsTab
+                    text: qsTr("Statistics")
+                    implicitHeight: 48
+                    contentItem: Text {
+                        text: statsTab.text
+                        color: statsTab.checked ? Theme.accent : Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeSM
+                        font.bold: statsTab.checked
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        color: "transparent"
+                        Rectangle {
+                            width: parent.width
+                            height: 2
+                            anchors.bottom: parent.bottom
+                            color: statsTab.checked ? Theme.accent : "transparent"
+                        }
+                    }
+                }
+                TabButton {
+                    id: logTab
+                    text: qsTr("Log")
+                    implicitHeight: 48
+                    contentItem: Text {
+                        text: logTab.text
+                        color: logTab.checked ? Theme.accent : Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeSM
+                        font.bold: logTab.checked
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        color: "transparent"
+                        Rectangle {
+                            width: parent.width
+                            height: 2
+                            anchors.bottom: parent.bottom
+                            color: logTab.checked ? Theme.accent : "transparent"
+                        }
+                    }
+                }
+                TabButton {
+                    id: settingsTab
+                    text: qsTr("Settings")
+                    implicitHeight: 48
+                    contentItem: Text {
+                        text: settingsTab.text
+                        color: settingsTab.checked ? Theme.accent : Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeSM
+                        font.bold: settingsTab.checked
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        color: "transparent"
+                        Rectangle {
+                            width: parent.width
+                            height: 2
+                            anchors.bottom: parent.bottom
+                            color: settingsTab.checked ? Theme.accent : "transparent"
+                        }
+                    }
+                }
+            }
         }
     }
 
+    // ── Content ──
     StackLayout {
         anchors.fill: parent
         currentIndex: navBar.currentIndex
