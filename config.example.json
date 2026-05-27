@@ -1,0 +1,58 @@
+{
+  "app": {
+    "line_id": "A-03",
+    "station_id": "seat_inspection",
+    "language": "zh-CN",
+    "fullscreen": true,
+    "grid_layout": "2x2"
+  },
+  "cameras": [
+    {
+      "camera_id": "CAM_FRONT",
+      "source": "mvs://0?exposure_time=6000&gain=8&pixel_format=bgr8",
+      "type": "mvs",
+      "enabled": true,
+      "efficientad_model_path": "./models/cam_front.pt",
+      "filter_classifier": {
+        "enabled": true,
+        "model_path": "./deployed_models/filter_classifier/",
+        "device": "cuda",
+        "confidence_threshold": 0.5
+      },
+      "proposal": {
+        "heatmap_threshold_mode": "adaptive",
+        "max_proposals": 20
+      },
+      "rule_engine": {
+        "enabled": true,
+        "deployed_rules_path": "./deployed_rules/rules.json"
+      },
+      "calibration": {
+        "normalizer_path": "./calibration/CAM_FRONT_normalizer.json",
+        "projector_path": "./calibration/projector.pt"
+      }
+    }
+  ],
+  "plc": {
+    "enabled": false,
+    "host": "192.168.1.100",
+    "port": 502,
+    "defect_coil": 100,
+    "stop_coil": 101
+  },
+  "offline_platform": {
+    "upload_base_url": "",
+    "hot_reload_enabled": false,
+    "hot_reload_poll_seconds": 30
+  },
+  "alert": {
+    "ng_popup_timeout_seconds": 30,
+    "ng_default_action": "confirm_defect",
+    "sound_enabled": false
+  },
+  "storage": {
+    "log_dir": "./logs",
+    "log_retention_days": 30,
+    "screenshot_dir": "./screenshots"
+  }
+}
