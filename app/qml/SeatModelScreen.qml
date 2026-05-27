@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import "components"
 import styles
@@ -25,19 +24,30 @@ Rectangle {
         function onRequestConfirmSwitch(modelId) { confirmDialog.modelId = modelId; confirmDialog.open(); }
     }
 
-    Dialog {
+    IndustrialDialog {
         id: confirmDialog
         property string modelId: ""
         title: qsTr("切换座椅型号")
-        modal: true
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        anchors.centerIn: parent
-        width: 400
-        contentItem: Text {
-            text: qsTr("切换型号将重新加载检测引擎，确认继续？")
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeSM
-            wrapMode: Text.Wrap
+        contentHeight: 60
+        acceptText: qsTr("确认切换")
+
+        contentItem: ColumnLayout {
+            spacing: Theme.spacingSM
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("切换型号将重新加载检测引擎，当前检测任务会被中断。")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeSM
+                wrapMode: Text.Wrap
+                lineHeight: 1.5
+            }
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("是否确认继续？")
+                color: Theme.statusWarning
+                font.pixelSize: Theme.fontSizeSM
+                font.weight: Font.DemiBold
+            }
         }
         onAccepted: {
             if (seatModelScreen.viewModel && confirmDialog.modelId) {
@@ -186,205 +196,242 @@ Rectangle {
         }
     }
 
-    Dialog {
+    IndustrialDialog {
         id: addDialog
         title: qsTr("新增座椅型号")
-        modal: true
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        anchors.centerIn: parent
-        width: 420
-        padding: Theme.spacingLG
+        contentHeight: 210
+        acceptText: qsTr("创建")
 
-        background: Rectangle {
-            color: Theme.bgSecondary
-            radius: Theme.radiusLG
-            border { width: 1; color: Theme.borderStrong }
-        }
+        contentItem: ColumnLayout {
+            spacing: 14
 
-        header: Text {
-            text: qsTr("新增座椅型号")
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeMD
-            font.bold: true
-            padding: Theme.spacingMD
-        }
-
-        ColumnLayout {
-            spacing: Theme.spacingMD
-            Layout.fillWidth: true
-
-            Text {
-                text: qsTr("型号 ID:")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSizeXS
-            }
-            Rectangle {
+            ColumnLayout {
+                spacing: 4
                 Layout.fillWidth: true
-                implicitHeight: 38
-                color: Theme.cardGlass
-                radius: Theme.radiusSM
-                border { width: 1; color: Theme.cardGlassBorder }
-                TextInput {
-                    id: addIdField
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    verticalAlignment: TextInput.AlignVCenter
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeSM
-                    activeFocusOnPress: true
-                    selectByMouse: true
+                Text {
+                    text: qsTr("型号 ID")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeXS
+                    font.weight: Font.Medium
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    color: addIdInput.activeFocus ? Qt.rgba(1, 1, 1, 0.06) : Theme.cardGlass
+                    radius: Theme.radiusSM
+                    border {
+                        width: 1
+                        color: addIdInput.activeFocus ? Theme.accent : Theme.cardGlassBorder
+                    }
+                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+                    TextInput {
+                        id: addIdInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        activeFocusOnPress: true
+                        selectByMouse: true
+                        Text {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            verticalAlignment: TextInput.AlignVCenter
+                            text: "seat_model_001"
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fontSizeSM
+                            visible: !addIdInput.activeFocus && addIdInput.text === ""
+                        }
+                    }
                 }
             }
 
-            Text {
-                text: qsTr("显示名称:")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSizeXS
-            }
-            Rectangle {
+            ColumnLayout {
+                spacing: 4
                 Layout.fillWidth: true
-                implicitHeight: 38
-                color: Theme.cardGlass
-                radius: Theme.radiusSM
-                border { width: 1; color: Theme.cardGlassBorder }
-                TextInput {
-                    id: addNameField
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    verticalAlignment: TextInput.AlignVCenter
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeSM
-                    activeFocusOnPress: true
-                    selectByMouse: true
+                Text {
+                    text: qsTr("显示名称")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeXS
+                    font.weight: Font.Medium
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    color: addNameInput.activeFocus ? Qt.rgba(1, 1, 1, 0.06) : Theme.cardGlass
+                    radius: Theme.radiusSM
+                    border {
+                        width: 1
+                        color: addNameInput.activeFocus ? Theme.accent : Theme.cardGlassBorder
+                    }
+                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+                    TextInput {
+                        id: addNameInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        activeFocusOnPress: true
+                        selectByMouse: true
+                        Text {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            verticalAlignment: TextInput.AlignVCenter
+                            text: qsTr("座椅型号A")
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fontSizeSM
+                            visible: !addNameInput.activeFocus && addNameInput.text === ""
+                        }
+                    }
                 }
             }
 
-            Text {
-                text: qsTr("描述:")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSizeXS
-            }
-            Rectangle {
+            ColumnLayout {
+                spacing: 4
                 Layout.fillWidth: true
-                implicitHeight: 38
-                color: Theme.cardGlass
-                radius: Theme.radiusSM
-                border { width: 1; color: Theme.cardGlassBorder }
-                TextInput {
-                    id: addDescField
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    verticalAlignment: TextInput.AlignVCenter
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeSM
-                    activeFocusOnPress: true
-                    selectByMouse: true
+                Text {
+                    text: qsTr("描述")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeXS
+                    font.weight: Font.Medium
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    color: addDescInput.activeFocus ? Qt.rgba(1, 1, 1, 0.06) : Theme.cardGlass
+                    radius: Theme.radiusSM
+                    border {
+                        width: 1
+                        color: addDescInput.activeFocus ? Theme.accent : Theme.cardGlassBorder
+                    }
+                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+                    TextInput {
+                        id: addDescInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        activeFocusOnPress: true
+                        selectByMouse: true
+                        Text {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            verticalAlignment: TextInput.AlignVCenter
+                            text: qsTr("例如：M8 螺栓固定型，2024-03 起生产")
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fontSizeSM
+                            visible: !addDescInput.activeFocus && addDescInput.text === ""
+                        }
+                    }
                 }
             }
-
-            Item { height: Theme.spacingSM; width: 1 }
         }
         onAccepted: {
-            seatModelScreen.viewModel.createModel(addIdField.text, addNameField.text, addDescField.text);
+            seatModelScreen.viewModel.createModel(addIdInput.text, addNameInput.text, addDescInput.text);
         }
         onOpened: {
-            addIdField.text = "";
-            addNameField.text = "";
-            addDescField.text = "";
-            addIdField.forceActiveFocus();
+            addIdInput.text = "";
+            addNameInput.text = "";
+            addDescInput.text = "";
+            addIdInput.forceActiveFocus();
         }
     }
 
-    Dialog {
+    IndustrialDialog {
         id: editDialog
         property string modelId: ""
         property string nameField: ""
         property string descField: ""
         title: qsTr("编辑型号")
-        modal: true
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        anchors.centerIn: parent
-        width: 420
-        padding: Theme.spacingLG
+        contentHeight: 160
+        acceptText: qsTr("保存")
 
-        background: Rectangle {
-            color: Theme.bgSecondary
-            radius: Theme.radiusLG
-            border { width: 1; color: Theme.borderStrong }
-        }
+        contentItem: ColumnLayout {
+            spacing: 14
 
-        header: Text {
-            text: qsTr("编辑型号")
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeMD
-            font.bold: true
-            padding: Theme.spacingMD
-        }
-
-        ColumnLayout {
-            spacing: Theme.spacingMD
-            Layout.fillWidth: true
-
-            Text {
-                text: qsTr("显示名称:")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSizeXS
-            }
-            Rectangle {
+            ColumnLayout {
+                spacing: 4
                 Layout.fillWidth: true
-                implicitHeight: 38
-                color: Theme.cardGlass
-                radius: Theme.radiusSM
-                border { width: 1; color: Theme.cardGlassBorder }
-                TextInput {
-                    id: editNameField
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    verticalAlignment: TextInput.AlignVCenter
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeSM
-                    activeFocusOnPress: true
-                    selectByMouse: true
+                Text {
+                    text: qsTr("显示名称")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeXS
+                    font.weight: Font.Medium
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    color: editNameInput.activeFocus ? Qt.rgba(1, 1, 1, 0.06) : Theme.cardGlass
+                    radius: Theme.radiusSM
+                    border {
+                        width: 1
+                        color: editNameInput.activeFocus ? Theme.accent : Theme.cardGlassBorder
+                    }
+                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+                    TextInput {
+                        id: editNameInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        activeFocusOnPress: true
+                        selectByMouse: true
+                    }
                 }
             }
 
-            Text {
-                text: qsTr("描述:")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSizeXS
-            }
-            Rectangle {
+            ColumnLayout {
+                spacing: 4
                 Layout.fillWidth: true
-                implicitHeight: 38
-                color: Theme.cardGlass
-                radius: Theme.radiusSM
-                border { width: 1; color: Theme.cardGlassBorder }
-                TextInput {
-                    id: editDescField
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    verticalAlignment: TextInput.AlignVCenter
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeSM
-                    activeFocusOnPress: true
-                    selectByMouse: true
+                Text {
+                    text: qsTr("描述")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeXS
+                    font.weight: Font.Medium
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    color: editDescInput.activeFocus ? Qt.rgba(1, 1, 1, 0.06) : Theme.cardGlass
+                    radius: Theme.radiusSM
+                    border {
+                        width: 1
+                        color: editDescInput.activeFocus ? Theme.accent : Theme.cardGlassBorder
+                    }
+                    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+                    TextInput {
+                        id: editDescInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        activeFocusOnPress: true
+                        selectByMouse: true
+                    }
                 }
             }
-
-            Item { height: Theme.spacingSM; width: 1 }
         }
         onAccepted: {
-            seatModelScreen.viewModel.updateModel(editDialog.modelId, editNameField.text, editDescField.text);
+            seatModelScreen.viewModel.updateModel(editDialog.modelId, editNameInput.text, editDescInput.text);
         }
         onOpened: {
-            editNameField.text = editDialog.nameField;
-            editDescField.text = editDialog.descField;
-            editNameField.forceActiveFocus();
+            editNameInput.text = editDialog.nameField;
+            editDescInput.text = editDialog.descField;
+            editNameInput.forceActiveFocus();
         }
     }
 }
