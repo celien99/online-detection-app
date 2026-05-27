@@ -1,4 +1,4 @@
-"""JSON configuration store with hot-reload support."""
+"""JSON configuration store with hot-reload and write-back support."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,7 @@ import os
 import threading
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 class ConfigStore:
@@ -17,6 +17,8 @@ class ConfigStore:
         self._lock = threading.RLock()
         self._data: Dict[str, Any] = {}
         self._mtime: float = 0.0
+        self._persistence: Any = None  # ConfigPersistenceService, set later
+        self._dirty: Dict[str, str] = {}
         self.reload()
 
     @property
@@ -24,8 +26,10 @@ class ConfigStore:
         with self._lock:
             return deepcopy(self._data)
 
+    def set_persistence(self, svc: Any) -> None:
+        self._persistence = svc
+
     def reload(self) -> bool:
-        """若文件有变化则重新加载，返回 True 表示已重载。"""
         try:
             stat = self._path.stat()
         except FileNotFoundError:
@@ -48,6 +52,54 @@ class ConfigStore:
                 else:
                     return default
             return node if node is not None else default
+
+    def set(self, path: str, value: Any) -> None:
+        """在内存中设置值并标记 dirty（尚未持久化）。"""
+        with self._lock:
+            parts = path.split(".")
+            node = self._data
+            for part in parts[:-1]:
+                if part not in node or not isinstance(node[part], dict):
+                    node[part] = {}
+                node = node[part]
+            node[parts[-1]] = value
+        self._dirty[path] = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
+
+    def save(self) -> bool:
+        """将内存中的配置持久化到 JSON 文件和 SQLite。"""
+        with self._lock:
+            data_copy = deepcopy(self._data)
+        tmp_path = str(self._path) + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data_copy, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, str(self._path))
+        self._mtime = os.path.getmtime(str(self._path))
+        if self._persistence is not None:
+            for path, value in self._dirty.items():
+                self._persistence.set(path, value)
+        self._dirty.clear()
+        return True
+
+    @property
+    def is_dirty(self) -> bool:
+        return len(self._dirty) > 0
+
+    def get_dirty_keys(self) -> list:
+        return list(self._dirty.keys())
+
+    def get_value_by_path(self, path: str) -> str:
+        """按点号路径读取，返回 JSON 字符串（兼容原 SettingsViewModel.getValue）。"""
+        import json as _json
+        with self._lock:
+            node: Any = self._data
+            for key in path.split("."):
+                if isinstance(node, dict):
+                    node = node.get(key, "")
+                else:
+                    return ""
+        return _json.dumps(node, ensure_ascii=False) if not isinstance(node, str) else node
+
+    # ── Convenience accessors ──
 
     def get_app_config(self) -> Dict[str, Any]:
         return self.get("app", default={})
