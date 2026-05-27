@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import "components"
+import styles
 
 Rectangle {
     id: logScreen

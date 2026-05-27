@@ -1,4 +1,5 @@
 import QtQuick
+import styles
 
 Rectangle {
     property string cardLabel: ""

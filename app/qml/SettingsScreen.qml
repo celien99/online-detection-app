@@ -1,12 +1,15 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Layouts
 import "components"
+import styles
 
 Rectangle {
     id: settingsScreen
     color: Theme.bgPrimary
 
-    Row {
+    RowLayout {
+        spacing: 0
         anchors.fill: parent
 
         Rectangle {
@@ -33,11 +36,13 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true
-            height: parent.height
+            Layout.fillHeight: true
             color: Theme.bgPrimary
-            padding: 16
 
-            Column { spacing: 10
+            Column {
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 10
                 Text {
                     text: qsTr("📷 相机配置")
                     color: Theme.accent

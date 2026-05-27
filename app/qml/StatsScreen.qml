@@ -1,5 +1,6 @@
 import QtQuick
 import "components"
+import styles
 
 Rectangle {
     id: statsScreen

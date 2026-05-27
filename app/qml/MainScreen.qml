@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import styles
 
 Rectangle {
     id: mainScreen

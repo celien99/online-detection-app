@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import "components"
+import styles
 
 Rectangle {
     id: overlay

@@ -129,7 +129,7 @@ def main(config_path: str | None = None) -> int:
     engine.addImageProvider("camera", image_provider)
 
     # Theme import path
-    theme_path = str(Path(__file__).parent / "resources" / "styles")
+    theme_path = str(Path(__file__).parent / "resources")
     engine.addImportPath(theme_path)
 
     # Create ViewModels
