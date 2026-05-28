@@ -36,11 +36,21 @@ class LogEngine:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_status ON inspection_log(status)")
             conn.commit()
 
-    def insert(self, record: InspectionRecord) -> None:
+    def insert(self, record: InspectionRecord) -> int:
         with sqlite3.connect(self._db_path) as conn:
-            conn.execute(
+            cursor = conn.execute(
                 "INSERT INTO inspection_log (timestamp, camera_id, status, reason, defect_type, confidence, operator_action) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (record.timestamp, record.camera_id, record.status, record.reason, record.defect_type, record.confidence, record.operator_action),
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def update_operator_action(self, camera_id: str, timestamp: float, action: str) -> None:
+        """回填操作员动作到最近的匹配记录。"""
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute(
+                "UPDATE inspection_log SET operator_action = ? WHERE camera_id = ? AND ABS(timestamp - ?) < 2.0 AND operator_action = '' ORDER BY timestamp DESC LIMIT 1",
+                (action, camera_id, timestamp),
             )
             conn.commit()
 
@@ -72,6 +82,25 @@ class LogEngine:
             cursor = conn.execute("DELETE FROM inspection_log WHERE timestamp < ?", (cutoff,))
             conn.commit()
             return cursor.rowcount
+
+    def get_pending_reviews(self, limit: int = 200) -> list:
+        """获取待复核的记录（operator_action = 'mark_review'）。"""
+        with sqlite3.connect(self._db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM inspection_log WHERE operator_action = 'mark_review' ORDER BY timestamp DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def resolve_review(self, record_id: int, new_action: str) -> None:
+        """将复核记录标记为已处理。"""
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute(
+                "UPDATE inspection_log SET operator_action = ? WHERE id = ?",
+                (new_action, record_id),
+            )
+            conn.commit()
 
     def export_csv(self, output_path: str) -> None:
         import csv

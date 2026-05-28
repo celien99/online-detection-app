@@ -19,14 +19,6 @@ Rectangle {
     color: Theme.bgOverlay
     z: 100
 
-    Timer {
-        id: countdownTimer
-        interval: 1000
-        repeat: true
-        running: overlay.visible
-        onTriggered: { if (countdown > 0) countdown--; }
-    }
-
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.spacingXL
@@ -45,7 +37,7 @@ Rectangle {
                 Text {
                     id: bannerText
                     anchors.centerIn: parent
-                    text: qsTr("DEFECT DETECTED")
+                    text: qsTr("缺陷检出")
                     color: "#ffffff"
                     font.pixelSize: Theme.fontSizeLG
                     font.bold: true
@@ -66,7 +58,7 @@ Rectangle {
                 Text {
                     id: countdownLabel
                     anchors.centerIn: parent
-                    text: qsTr("Auto-confirm in ") + countdown + "s"
+                    text: qsTr("自动确认 ") + countdown + "s"
                     color: countdown <= 5 ? Theme.statusNG : Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     font.bold: true
@@ -99,7 +91,7 @@ Rectangle {
                         Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: parent.radius; color: parent.color }
                         Text {
                             anchors.centerIn: parent
-                            text: qsTr("Original  ") + cameraId
+                            text: qsTr("原图  ") + cameraId
                             color: Theme.textSecondary
                             font.pixelSize: Theme.fontSizeXS
                         }
@@ -134,7 +126,7 @@ Rectangle {
                         Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: parent.radius; color: parent.color }
                         Text {
                             anchors.centerIn: parent
-                            text: qsTr("Heatmap  Score: ") + confidence.toFixed(4)
+                            text: qsTr("热力图  分数: ") + confidence.toFixed(4)
                             color: Theme.textSecondary
                             font.pixelSize: Theme.fontSizeXS
                         }
@@ -158,27 +150,27 @@ Rectangle {
 
             InfoCard {
                 accentColor: Theme.statusNG
-                cardLabel: qsTr("Defect Type")
+                cardLabel: qsTr("缺陷类型")
                 cardValue: defectType || "--"
                 Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.statusWarning
-                cardLabel: qsTr("Confidence")
+                cardLabel: qsTr("置信度")
                 cardValue: confidence.toFixed(3)
                 Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.accent
-                cardLabel: qsTr("Camera")
+                cardLabel: qsTr("相机")
                 cardValue: cameraId
                 Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.textSecondary
-                cardLabel: qsTr("Auto Action")
+                cardLabel: qsTr("自动动作")
                 cardValue: "NG"
-                cardSubtext: qsTr("on timeout")
+                cardSubtext: qsTr("超时后")
                 Layout.fillWidth: true
             }
         }
@@ -189,7 +181,7 @@ Rectangle {
             spacing: Theme.spacingLG
 
             ActionButton {
-                buttonText: qsTr("Confirm NG")
+                buttonText: qsTr("确认缺陷")
                 bgColor: Theme.statusNG
                 Layout.fillWidth: true
                 implicitHeight: Theme.touchComfort
@@ -197,7 +189,7 @@ Rectangle {
                 onClicked: overlay.confirmNG()
             }
             ActionButton {
-                buttonText: qsTr("Mark for Review")
+                buttonText: qsTr("标记待复核")
                 bgColor: Theme.statusWarning
                 textColor: "#000000"
                 Layout.fillWidth: true
@@ -206,7 +198,7 @@ Rectangle {
                 onClicked: overlay.markReview()
             }
             ActionButton {
-                buttonText: qsTr("Dismiss (False Alarm)")
+                buttonText: qsTr("误报忽略")
                 bgColor: Theme.bgTertiary
                 Layout.fillWidth: true
                 implicitHeight: Theme.touchComfort

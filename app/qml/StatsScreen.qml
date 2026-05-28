@@ -11,6 +11,7 @@ Rectangle {
     property int ok: 0
     property int ng: 0
     property real okRate: 0.0
+    property var viewModel: null
 
     ColumnLayout {
         anchors.fill: parent
@@ -30,59 +31,95 @@ Rectangle {
 
             InfoCard {
                 accentColor: Theme.statusOK
-                cardLabel: qsTr("OK Today")
+                cardLabel: qsTr("今日 OK")
                 cardValue: String(ok)
                 Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.statusNG
-                cardLabel: qsTr("NG Today")
+                cardLabel: qsTr("今日 NG")
                 cardValue: String(ng)
                 Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.accent
-                cardLabel: qsTr("OK Rate")
+                cardLabel: qsTr("合格率")
                 cardValue: okRate.toFixed(1) + "%"
                 Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.statusWarning
-                cardLabel: qsTr("Total")
+                cardLabel: qsTr("总计")
                 cardValue: String(total)
                 Layout.fillWidth: true
             }
             InfoCard {
                 accentColor: Theme.textSecondary
-                cardLabel: qsTr("Filter Suppressed")
+                cardLabel: qsTr("过滤抑制")
                 cardValue: String(total - ok - ng)
-                cardSubtext: qsTr("false positive blocked")
+                cardSubtext: qsTr("误报已拦截")
                 Layout.fillWidth: true
             }
         }
 
-        // Placeholder for charts
-        Rectangle {
+        // Defect distribution
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Theme.bgCard
-            radius: Theme.radiusMD
-            border { width: 1; color: Theme.borderDefault }
+            spacing: Theme.spacingSM
 
-            Column {
-                anchors.centerIn: parent
+            Text {
+                text: qsTr("缺陷分布")
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontSizeMD
+                font.bold: true
+            }
+
+            RowLayout {
                 spacing: Theme.spacingSM
                 Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: qsTr("Trend Charts & Defect Distribution")
+                    text: {
+                        var dist = statsScreen.viewModel ? statsScreen.viewModel.defectDistribution : ({});
+                        var keys = Object.keys(dist);
+                        return keys.length === 0 ? qsTr("今日暂无缺陷") : keys.length + qsTr(" 种缺陷类型");
+                    }
                     color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSizeMD
-                }
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: qsTr("Charts will be available in a future update")
-                    color: Theme.textMuted
                     font.pixelSize: Theme.fontSizeSM
+                }
+            }
+
+            ListView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                model: {
+                    var dist = statsScreen.viewModel ? statsScreen.viewModel.defectDistribution : ({});
+                    return Object.keys(dist).length > 0
+                        ? Object.entries(dist).map(function(e) { return { type: e[0], count: e[1] }; })
+                        : [];
+                }
+
+                delegate: RowLayout {
+                    width: ListView.view.width
+                    height: 28
+                    spacing: Theme.spacingMD
+
+                    Rectangle {
+                        Layout.preferredWidth: 12; Layout.preferredHeight: 12; radius: 6
+                        color: Theme.statusNG
+                    }
+                    Text {
+                        text: modelData.type
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: String(modelData.count)
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeSM
+                        font.bold: true
+                    }
                 }
             }
         }

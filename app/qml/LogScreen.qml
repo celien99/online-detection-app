@@ -9,6 +9,7 @@ Rectangle {
     color: Theme.bgPrimary
 
     property var logModel: []
+    property var viewModel: null
 
     ColumnLayout {
         anchors.fill: parent
@@ -18,7 +19,7 @@ Rectangle {
         // Header row
         RowLayout {
             Text {
-                text: qsTr("Inspection Log")
+                text: qsTr("检测日志")
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontSizeLG
                 font.bold: true
@@ -26,20 +27,23 @@ Rectangle {
             }
 
             ActionButton {
-                buttonText: qsTr("Export CSV")
+                buttonText: qsTr("导出 CSV")
                 bgColor: Theme.bgTertiary
                 implicitHeight: 36
                 implicitWidth: 120
+                onClicked: {
+                    if (logScreen.viewModel) logScreen.viewModel.exportCSV("");
+                }
             }
         }
 
         // Filters
         RowLayout {
             spacing: Theme.spacingSM
-            Text { text: qsTr("Filter:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
+            Text { text: qsTr("筛选:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
             ComboBox {
                 id: statusFilter
-                model: [qsTr("All"), "OK", "NG", "REJECT"]
+                model: [qsTr("全部"), "OK", "NG", "REJECT"]
                 implicitWidth: 120
                 implicitHeight: 32
                 background: Rectangle {
@@ -54,10 +58,14 @@ Rectangle {
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: Theme.spacingSM
                 }
+                onActivated: {
+                    var val = currentText === qsTr("全部") ? "" : currentText;
+                    if (logScreen.viewModel) logScreen.viewModel.setStatusFilter(val);
+                }
             }
             ComboBox {
                 id: cameraFilter
-                model: [qsTr("All Cameras"), "CAM_FRONT", "CAM_RIGHT", "CAM_LEFT", "CAM_REAR"]
+                model: [qsTr("全部相机"), "CAM_FRONT", "CAM_RIGHT", "CAM_LEFT", "CAM_REAR"]
                 implicitWidth: 140
                 implicitHeight: 32
                 background: Rectangle {
@@ -71,6 +79,10 @@ Rectangle {
                     font.pixelSize: Theme.fontSizeSM
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: Theme.spacingSM
+                }
+                onActivated: {
+                    var val = currentText === qsTr("全部相机") ? "" : currentText;
+                    if (logScreen.viewModel) logScreen.viewModel.setCameraFilter(val);
                 }
             }
         }
@@ -95,7 +107,7 @@ Rectangle {
                     anchors.rightMargin: Theme.spacingSM
                     spacing: 4
                     Repeater {
-                        model: [qsTr("Time"), qsTr("Camera"), qsTr("Status"), qsTr("Type"), qsTr("Conf"), qsTr("Action")]
+                        model: [qsTr("时间"), qsTr("Camera"), qsTr("状态"), qsTr("缺陷"), qsTr("置信度"), qsTr("操作")]
                         delegate: Rectangle {
                             width: logList.width / 6
                             height: 32

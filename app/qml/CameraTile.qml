@@ -34,7 +34,7 @@ Rectangle {
         visible: !live
         Text {
             anchors.centerIn: parent
-            text: qsTr("No Signal")
+            text: qsTr("无信号")
             color: Theme.textMuted
             font.pixelSize: Theme.fontSizeSM
         }

@@ -35,9 +35,9 @@ Rectangle {
         Text {
             text: {
                 switch (systemStatus) {
-                    case "running": return qsTr("Running");
-                    case "paused": return qsTr("Paused");
-                    default: return qsTr("Stopped");
+                    case "running": return qsTr("运行中");
+                    case "paused": return qsTr("已暂停");
+                    default: return qsTr("已停止");
                 }
             }
             color: Theme.textPrimary
@@ -51,7 +51,7 @@ Rectangle {
 
         // Line info
         Text {
-            text: qsTr("Line ") + lineId
+            text: qsTr("产线 ") + lineId
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSizeSM
             Layout.leftMargin: Theme.spacingMD
@@ -64,7 +64,7 @@ Rectangle {
 
         // Tact rate
         Text {
-            text: qsTr("Tact: ") + tactRate.toFixed(1) + "/min"
+            text: qsTr("节拍: ") + tactRate.toFixed(1) + "/min"
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSizeSM
             Layout.leftMargin: Theme.spacingMD

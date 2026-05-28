@@ -10,3 +10,4 @@ build/
 .torch_cache/
 *.egg-info
 .DS_Store
+.superpowers/

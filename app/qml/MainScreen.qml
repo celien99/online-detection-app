@@ -25,6 +25,7 @@ Rectangle {
         CameraGrid {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            cameraModel: viewModel ? viewModel.cameraList : []
         }
     }
 
@@ -35,6 +36,7 @@ Rectangle {
         defectType: viewModel ? viewModel.ngDefectType : ""
         confidence: viewModel ? viewModel.ngConfidence : 0.0
         cameraId: viewModel ? viewModel.ngCameraId : ""
+        countdown: viewModel ? viewModel.remainingSeconds : 0
 
         onConfirmNG: { if (viewModel) viewModel.acknowledgeNG(); }
         onMarkReview: { if (viewModel) viewModel.markReview(); }
