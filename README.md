@@ -1,11 +1,3 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/PySide6-6.6+-41CD52?style=flat-square&logo=qt&logoColor=white" />
-  <img src="https://img.shields.io/badge/QML-6.6+-41CD52?style=flat-square&logo=qt&logoColor=white" />
-  <img src="https://img.shields.io/badge/OpenCV-4.8+-5C3EE8?style=flat-square&logo=opencv&logoColor=white" />
-  <img src="https://img.shields.io/badge/arch-MVVM-7B3FE4?style=flat-square" />
-</p>
-
 <h1 align="center">Online Detection App</h1>
 
 <p align="center">
@@ -20,6 +12,14 @@
   <a href="#-屏幕截图">功能概览</a> ·
   <a href="#-配置说明">配置说明</a> ·
   <a href="#-项目结构">项目结构</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/PySide6-6.6+-41CD52?style=flat-square&logo=qt&logoColor=white" />
+  <img src="https://img.shields.io/badge/QML-6.6+-41CD52?style=flat-square&logo=qt&logoColor=white" />
+  <img src="https://img.shields.io/badge/OpenCV-4.8+-5C3EE8?style=flat-square&logo=opencv&logoColor=white" />
+  <img src="https://img.shields.io/badge/arch-MVVM-7B3FE4?style=flat-square" />
 </p>
 
 ---
