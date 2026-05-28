@@ -71,7 +71,63 @@ def _create_plc(plc_config: Dict[str, Any]) -> PLCInterface:
     )
 
 
+class QmlHotReload:
+    """Watches QML files and sets a flag when changes are detected.
+
+    The flag is polled from the Qt main thread via QTimer, which then calls
+    the reload callback — this keeps all QML engine operations on the correct thread.
+    """
+
+    def __init__(self, watch_dir: Path) -> None:
+        self._dir = watch_dir
+        self._running = False
+        self._mtimes: dict[str, float] = {}
+        self.reload_requested = False
+        self._debounce_s = 0.3
+        self._last_change = 0.0
+        self._pending = False
+
+    def start(self) -> None:
+        self._running = True
+        t = threading.Thread(target=self._poll, daemon=True, name="qml-watcher")
+        t.start()
+
+    def stop(self) -> None:
+        self._running = False
+
+    def _poll(self) -> None:
+        while self._running:
+            changed = self._scan()
+            if changed:
+                self._last_change = time.time()
+                self._pending = True
+            if self._pending and (time.time() - self._last_change) >= self._debounce_s:
+                self._pending = False
+                self.reload_requested = True
+            time.sleep(0.5)
+
+    def _scan(self) -> bool:
+        changed = False
+        for path in self._dir.rglob("*.qml"):
+            key = str(path)
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            if key not in self._mtimes:
+                self._mtimes[key] = mtime
+            elif mtime != self._mtimes[key]:
+                self._mtimes[key] = mtime
+                changed = True
+        return changed
+
+
 def main(config_path: str | None = None) -> int:
+    dev_mode = "--dev" in sys.argv
+    if dev_mode:
+        os.environ.setdefault("QML_DISABLE_DISK_CACHE", "1")
+        os.environ.setdefault("QT_QUICK_CONTROLS_CONF", "qtquickcontrols2.conf")
+
     if config_path is None:
         config_path = os.environ.get("SEAT_INSPECTION_CONFIG", "config.json")
     if not Path(config_path).exists():
@@ -154,6 +210,10 @@ def main(config_path: str | None = None) -> int:
     camera_manager.start_watchdog()
 
     # ── QML Application ──
+    if dev_mode:
+        from PySide6.QtCore import qputenv
+        qputenv("QML_DISABLE_DISK_CACHE", b"1")
+
     app = QGuiApplication(sys.argv)
     app.setApplicationDisplayName("座椅缺陷在线检测系统")
 
@@ -218,6 +278,38 @@ def main(config_path: str | None = None) -> int:
     root.setProperty("reviewViewModel", review_vm)
     root.setProperty("seatModelViewModel", seat_model_vm)
     root.setProperty("modelDeployViewModel", model_deploy_vm)
+
+    # ── QML hot reload (dev mode) ──
+    if dev_mode:
+        _qml_dir = Path(__file__).parent / "qml"
+        _qml_watcher = QmlHotReload(_qml_dir)
+
+        def _hot_reload_tick() -> None:
+            if not _qml_watcher.reload_requested:
+                return
+            _qml_watcher.reload_requested = False
+            engine.clearComponentCache()
+            engine.load(QUrl.fromLocalFile(qml_path))
+            objs = engine.rootObjects()
+            if not objs:
+                print("[hot-reload] QML reload produced no root objects", file=sys.stderr)
+                return
+            new_root = objs[0]
+            new_root.setProperty("mainViewModel", main_vm)
+            new_root.setProperty("logViewModel", log_vm)
+            new_root.setProperty("statsViewModel", stats_vm)
+            new_root.setProperty("settingsViewModel", settings_vm)
+            new_root.setProperty("reviewViewModel", review_vm)
+            new_root.setProperty("seatModelViewModel", seat_model_vm)
+            new_root.setProperty("modelDeployViewModel", model_deploy_vm)
+            print("[hot-reload] QML reloaded")
+
+        _reload_timer = QTimer()
+        _reload_timer.timeout.connect(_hot_reload_tick)
+        _reload_timer.start(200)
+
+        _qml_watcher.start()
+        print(f"[hot-reload] Watching {_qml_dir} for QML changes...")
 
     # ── Inspection Loop ──
     running = True
@@ -295,6 +387,8 @@ def main(config_path: str | None = None) -> int:
     def cleanup() -> None:
         nonlocal running
         running = False
+        if dev_mode:
+            _qml_watcher.stop()
         camera_manager.stop_watchdog()
         hot_reload.stop()
         camera_manager.disconnect_all()

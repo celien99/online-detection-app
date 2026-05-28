@@ -11,6 +11,9 @@ uv sync
 # Run the app (requires config.json)
 uv run python -m app.main
 
+# Run in dev mode with QML hot reload
+uv run python -m app.main --dev
+
 # Run all tests
 uv run pytest
 
