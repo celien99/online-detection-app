@@ -7,6 +7,13 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Type
 
+from .calibration.config import (
+    CalibrationConfig,
+    CameraNormConfig,
+    EMACenterConfig,
+    ProjectionConfig,
+    WhiteningConfig,
+)
 from .config import (
     AlignmentConfig,
     CameraConfig,
@@ -87,6 +94,10 @@ def _parse_inspection_config(payload: Dict[str, Any], config_dir: Path) -> Inspe
             scope=f"{scope}.fusion",
         ),
         upload_base_url=_optional_string(payload.get("upload_base_url")),
+        calibration=_parse_calibration_config(
+            payload.get("calibration"),
+            scope=f"{scope}.calibration",
+        ),
     )
 
 
@@ -169,6 +180,13 @@ def _parse_camera_config(payload: Dict[str, Any], config_dir: Path, *, scope: st
         rule_engine=_parse_rule_engine_config(
             payload.get("rule_engine"),
             scope=f"{scope}.rule_engine",
+        ),
+        calibration=_parse_calibration_config(
+            payload.get("calibration"),
+            scope=f"{scope}.calibration",
+        ),
+        color_insensitive_mode=_bool_or_default(
+            payload.get("color_insensitive_mode"), True
         ),
     )
 
@@ -413,6 +431,92 @@ def _parse_rule_config(payload: Any, *, scope: str) -> RuleConfig:
     )
 
 
+def _parse_calibration_config(payload: Any, *, scope: str) -> CalibrationConfig:
+    """解析完整校准配置。返回默认值如果 payload 为 None。"""
+    defaults = CalibrationConfig()
+    if payload is None:
+        return defaults
+    payload = _expect_dict(payload, scope)
+    _reject_unknown_keys(payload, _field_names(CalibrationConfig), scope)
+    return CalibrationConfig(
+        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
+        camera_norm=_parse_camera_norm_config(
+            payload.get("camera_norm"), scope=f"{scope}.camera_norm"
+        ),
+        projection=_parse_projection_config(
+            payload.get("projection"), scope=f"{scope}.projection"
+        ),
+        whitening=_parse_whitening_config(
+            payload.get("whitening"), scope=f"{scope}.whitening"
+        ),
+        ema_center=_parse_ema_center_config(
+            payload.get("ema_center"), scope=f"{scope}.ema_center"
+        ),
+        camera_norm_paths=_string_dict_or_default(
+            payload.get("camera_norm_paths"), defaults.camera_norm_paths
+        ),
+    )
+
+
+def _parse_camera_norm_config(payload: Any, *, scope: str) -> CameraNormConfig:
+    defaults = CameraNormConfig()
+    if payload is None:
+        return defaults
+    payload = _expect_dict(payload, scope)
+    _reject_unknown_keys(payload, _field_names(CameraNormConfig), scope)
+    return CameraNormConfig(
+        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
+        stats_path=_string_or_default(payload.get("stats_path"), defaults.stats_path),
+    )
+
+
+def _parse_projection_config(payload: Any, *, scope: str) -> ProjectionConfig:
+    defaults = ProjectionConfig()
+    if payload is None:
+        return defaults
+    payload = _expect_dict(payload, scope)
+    _reject_unknown_keys(payload, _field_names(ProjectionConfig), scope)
+    return ProjectionConfig(
+        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
+        projector_path=_string_or_default(
+            payload.get("projector_path"), defaults.projector_path
+        ),
+    )
+
+
+def _parse_whitening_config(payload: Any, *, scope: str) -> WhiteningConfig:
+    defaults = WhiteningConfig()
+    if payload is None:
+        return defaults
+    payload = _expect_dict(payload, scope)
+    _reject_unknown_keys(payload, _field_names(WhiteningConfig), scope)
+    return WhiteningConfig(
+        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
+        method=_string_or_default(payload.get("method"), defaults.method),
+        regularization=_float_or_default(
+            payload.get("regularization"), defaults.regularization
+        ),
+        matrix_path=_string_or_default(payload.get("matrix_path"), defaults.matrix_path),
+    )
+
+
+def _parse_ema_center_config(payload: Any, *, scope: str) -> EMACenterConfig:
+    defaults = EMACenterConfig()
+    if payload is None:
+        return defaults
+    payload = _expect_dict(payload, scope)
+    _reject_unknown_keys(payload, _field_names(EMACenterConfig), scope)
+    return EMACenterConfig(
+        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
+        alpha=_float_or_default(payload.get("alpha"), defaults.alpha),
+        min_samples=_int_or_default(payload.get("min_samples"), defaults.min_samples),
+        novelty_threshold=_float_or_default(
+            payload.get("novelty_threshold"), defaults.novelty_threshold
+        ),
+        centers_path=_string_or_default(payload.get("centers_path"), defaults.centers_path),
+    )
+
+
 # 通用字段读取与路径解析工具。
 def _is_missing(value: Any) -> bool:
     return value is None or value == ""
@@ -501,6 +605,13 @@ def _optional_int(value: Any) -> Optional[int]:
     if _is_missing(value):
         return None
     return int(value)
+
+
+def _string_dict_or_default(value: Any, default: dict[str, str]) -> dict[str, str]:
+    """解析字符串→字符串映射，用于 camera_norm_paths 等字段。"""
+    if value is None or not isinstance(value, dict):
+        return dict(default)
+    return {str(k): str(v) for k, v in value.items()}
 
 
 def _has_path_separator(value: str) -> bool:

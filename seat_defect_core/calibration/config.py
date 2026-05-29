@@ -47,3 +47,6 @@ class CalibrationConfig:
     projection: ProjectionConfig = field(default_factory=ProjectionConfig)
     whitening: WhiteningConfig = field(default_factory=WhiteningConfig)
     ema_center: EMACenterConfig = field(default_factory=EMACenterConfig)
+    # 每个 camera_id 对应的 CameraNormalizer stats 文件路径
+    # 例如 {"cam_front": "./calibration/cam_front_norm.npz"}
+    camera_norm_paths: dict[str, str] = field(default_factory=dict)

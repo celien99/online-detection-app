@@ -67,26 +67,22 @@ def _anomaly_context_from_dict(d: dict[str, Any]) -> AnomalyContext:
 
 def _features_to_dict(f: EfficientADFeatures) -> dict[str, Any]:
     return {
-        "teacher_l1_ref": f.teacher_l1_ref,
-        "teacher_l2_ref": f.teacher_l2_ref,
-        "teacher_l3_ref": f.teacher_l3_ref,
+        "teacher_ref": f.teacher_ref,
+        "student_ref": f.student_ref,
         "difference_ref": f.difference_ref,
-        "teacher_l1_shape": list(f.teacher_l1_shape),
-        "teacher_l2_shape": list(f.teacher_l2_shape),
-        "teacher_l3_shape": list(f.teacher_l3_shape),
+        "teacher_shape": list(f.teacher_shape),
+        "student_shape": list(f.student_shape),
         "difference_shape": list(f.difference_shape),
     }
 
 
 def _features_from_dict(d: dict[str, Any]) -> EfficientADFeatures:
     return EfficientADFeatures(
-        teacher_l1_ref=d["teacher_l1_ref"],
-        teacher_l2_ref=d["teacher_l2_ref"],
-        teacher_l3_ref=d["teacher_l3_ref"],
+        teacher_ref=d["teacher_ref"],
+        student_ref=d["student_ref"],
         difference_ref=d["difference_ref"],
-        teacher_l1_shape=tuple(d["teacher_l1_shape"]),
-        teacher_l2_shape=tuple(d["teacher_l2_shape"]),
-        teacher_l3_shape=tuple(d["teacher_l3_shape"]),
+        teacher_shape=tuple(d["teacher_shape"]),
+        student_shape=tuple(d["student_shape"]),
         difference_shape=tuple(d["difference_shape"]),
     )
 

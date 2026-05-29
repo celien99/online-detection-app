@@ -160,6 +160,7 @@ class CameraConfig:
     proposal: ProposalConfig | None = None
     calibration: CalibrationConfig | None = None
     track: TrackConfig | None = None
+    color_insensitive_mode: bool = True
 
 
 @dataclass
@@ -197,6 +198,7 @@ class InspectionConfig:
     fusion: FusionConfig = field(default_factory=FusionConfig)
     # 如果设置了此 URL，检测完成后会自动将 NG 结果上传到离线平台
     upload_base_url: Optional[str] = None
+    calibration: Optional[CalibrationConfig] = None
 
 
 __all__ = [

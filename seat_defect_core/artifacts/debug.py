@@ -120,6 +120,11 @@ def _restore_heatmap_to_crop(
     heatmap: np.ndarray,
     crop_shape: Tuple[int, int],
 ) -> np.ndarray:
+    """Map canonical heatmap (direct-stretch resized) back to original crop dimensions.
+
+    Since _letterbox_bundle now uses direct stretch (matching training),
+    the heatmap maps 1:1 from canonical_size → crop_shape via simple resize.
+    """
     canonical_shape = select_texture_input(roi).shape[:2]
     clipped = np.clip(np.asarray(heatmap, dtype=np.float32), 0.0, 1.0)
     if clipped.shape != canonical_shape:
@@ -133,24 +138,8 @@ def _restore_heatmap_to_crop(
     if crop_height <= 0 or crop_width <= 0:
         return np.zeros((0, 0), dtype=np.float32)
 
-    canonical_height, canonical_width = canonical_shape
-    scale = min(
-        float(canonical_width) / float(crop_width),
-        float(canonical_height) / float(crop_height),
-    )
-    content_width = max(1, int(round(crop_width * scale)))
-    content_height = max(1, int(round(crop_height * scale)))
-    offset_x = max(0, (canonical_width - content_width) // 2)
-    offset_y = max(0, (canonical_height - content_height) // 2)
-
-    content = clipped[
-        offset_y : min(canonical_height, offset_y + content_height),
-        offset_x : min(canonical_width, offset_x + content_width),
-    ]
-    if content.size == 0:
-        return np.zeros((crop_height, crop_width), dtype=np.float32)
     return cv2.resize(
-        content,
+        clipped,
         (crop_width, crop_height),
         interpolation=cv2.INTER_LINEAR,
     )

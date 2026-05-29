@@ -9,7 +9,6 @@ from seat_defect_core.calibration import (
     CalibrationConfig,
     CalibrationRegistry,
     CameraNormalizer,
-    CameraNormConfig,
     EMAFeatureCenter,
     EmbeddingProjector,
     ProjectionConfig,
@@ -25,17 +24,16 @@ class TestCameraNormalizer:
         features_list = []
         for _ in range(20):
             features_list.append({
-                "teacher_l1": rng.randn(8, 8, 64).astype(np.float32),
-                "teacher_l2": rng.randn(8, 8, 128).astype(np.float32),
-                "teacher_l3": rng.randn(8, 8, 256).astype(np.float32),
-                "difference": rng.randn(16, 16, 64).astype(np.float32),
+                "teacher": rng.randn(8, 8, 384).astype(np.float32),
+                "student": rng.randn(8, 8, 768).astype(np.float32),
+                "difference": rng.randn(8, 8, 384).astype(np.float32),
             })
 
         normalizer.fit(features_list)
         assert normalizer.is_fitted
 
         normalized = normalizer.normalize(features_list[0])
-        for key in ["teacher_l1", "teacher_l2", "teacher_l3", "difference"]:
+        for key in ["teacher", "student", "difference"]:
             val = normalized[key]
             flat = val.reshape(-1, val.shape[-1])
             channel_mean = flat.mean(axis=0)
@@ -46,10 +44,9 @@ class TestCameraNormalizer:
     def test_save_and_load(self, tmp_path):
         normalizer = CameraNormalizer()
         features_list = [{
-            "teacher_l1": np.random.randn(8, 8, 64).astype(np.float32),
-            "teacher_l2": np.random.randn(4, 4, 128).astype(np.float32),
-            "teacher_l3": np.random.randn(2, 2, 256).astype(np.float32),
-            "difference": np.random.randn(16, 16, 64).astype(np.float32),
+            "teacher": np.random.randn(8, 8, 384).astype(np.float32),
+            "student": np.random.randn(4, 4, 768).astype(np.float32),
+            "difference": np.random.randn(8, 8, 384).astype(np.float32),
         }]
         normalizer.fit(features_list)
 
@@ -66,28 +63,29 @@ class TestCameraNormalizer:
     def test_online_update(self):
         normalizer = CameraNormalizer()
         feats = {
-            "teacher_l1": np.ones((8, 8, 64), dtype=np.float32) * 5.0,
-            "teacher_l2": np.ones((4, 4, 128), dtype=np.float32) * 5.0,
-            "teacher_l3": np.ones((2, 2, 256), dtype=np.float32) * 5.0,
-            "difference": np.ones((16, 16, 64), dtype=np.float32) * 5.0,
+            "teacher": np.ones((8, 8, 384), dtype=np.float32) * 5.0,
+            "student": np.ones((4, 4, 768), dtype=np.float32) * 5.0,
+            "difference": np.ones((8, 8, 384), dtype=np.float32) * 5.0,
         }
         normalizer.update(feats)
         assert normalizer.is_fitted
-        stats = normalizer._stats["teacher_l1"]
+        stats = normalizer._stats["teacher"]
         assert np.allclose(stats.mean, 5.0, atol=0.01)
 
     def test_missing_key_passthrough(self):
         normalizer = CameraNormalizer()
         features_list = [{
-            "teacher_l1": np.random.randn(4, 4, 32).astype(np.float32),
+            "teacher": np.random.randn(4, 4, 384).astype(np.float32),
         }]
         normalizer.fit(features_list)
 
+        # extra key (not in _FEATURE_KEYS) not included in normalize output
         result = normalizer.normalize({
-            "teacher_l1": np.random.randn(4, 4, 32).astype(np.float32),
-            "teacher_l2": np.random.randn(2, 2, 64).astype(np.float32),
+            "teacher": np.random.randn(4, 4, 384).astype(np.float32),
+            "extra_key": np.random.randn(2, 2, 64).astype(np.float32),
         })
-        assert "teacher_l2" in result
+        assert "teacher" in result
+        assert "extra_key" not in result
 
 
 class TestEmbeddingProjector:
@@ -95,14 +93,14 @@ class TestEmbeddingProjector:
         features_list = []
         for _ in range(100):
             features_list.append({
-                "teacher_l1": np.random.randn(8, 8, 64).astype(np.float32),
-                "teacher_l2": np.random.randn(4, 4, 128).astype(np.float32),
+                "teacher": np.random.randn(8, 8, 384).astype(np.float32),
+                "student": np.random.randn(4, 4, 768).astype(np.float32),
             })
 
         projector = EmbeddingProjector.fit(
             features_list,
             output_dim=64,
-            pool_sizes={"teacher_l1": (1, 1), "teacher_l2": (1, 1)},
+            pool_sizes={"teacher": (1, 1), "student": (1, 1)},
         )
         assert projector.is_fitted
         assert projector.output_dim == 64
@@ -113,7 +111,7 @@ class TestEmbeddingProjector:
 
     def test_missing_feature_raises(self):
         projector = EmbeddingProjector.fit(
-            [{"teacher_l1": np.random.randn(8, 8, 64).astype(np.float32)}],
+            [{"teacher": np.random.randn(8, 8, 384).astype(np.float32)}],
             output_dim=32,
         )
         with pytest.raises(KeyError):
@@ -121,7 +119,7 @@ class TestEmbeddingProjector:
 
     def test_save_and_load(self, tmp_path):
         features_list = [{
-            "teacher_l1": np.random.randn(8, 8, 64).astype(np.float32),
+            "teacher": np.random.randn(8, 8, 384).astype(np.float32),
         }]
         projector = EmbeddingProjector.fit(features_list, output_dim=32)
 
@@ -214,23 +212,28 @@ class TestEMAFeatureCenter:
 
 class TestCalibrationRegistry:
     def test_calibrate_full_pipeline(self, tmp_path):
+        # 1. 先在原始特征上拟合 normalizer（per-camera per-channel 标准化）
         normalizer = CameraNormalizer()
-        normalizer.fit([{
-            "teacher_l1": np.random.randn(8, 8, 128).astype(np.float32),
-            "teacher_l2": np.random.randn(4, 4, 128).astype(np.float32),
-            "teacher_l3": np.random.randn(2, 2, 128).astype(np.float32),
-        }])
+        raw_feats_list = []
+        for _ in range(100):
+            raw_feats_list.append({
+                "teacher": np.random.randn(8, 8, 384).astype(np.float32),
+                "student": np.random.randn(4, 4, 768).astype(np.float32),
+                "difference": np.random.randn(8, 8, 384).astype(np.float32),
+            })
+        normalizer.fit(raw_feats_list)
         norm_path = str(tmp_path / "norm.npz")
         normalizer.save(norm_path)
 
-        # Need N >= 384 and concat_dim >= 384 for PCA to produce 384-dim output
+        # 2. 在归一化特征上拟合 projector（正确顺序：先 normalize 再 project）
         proj_feats = []
         for _ in range(500):
-            proj_feats.append({
-                "teacher_l1": np.random.randn(8, 8, 128).astype(np.float32),
-                "teacher_l2": np.random.randn(4, 4, 128).astype(np.float32),
-                "teacher_l3": np.random.randn(2, 2, 128).astype(np.float32),
-            })
+            raw = {
+                "teacher": np.random.randn(8, 8, 384).astype(np.float32),
+                "student": np.random.randn(4, 4, 768).astype(np.float32),
+                "difference": np.random.randn(8, 8, 384).astype(np.float32),
+            }
+            proj_feats.append(normalizer.normalize(raw))
         projector = EmbeddingProjector.fit(proj_feats, output_dim=384)
         proj_path = str(tmp_path / "proj.npz")
         projector.save(proj_path)
@@ -238,14 +241,14 @@ class TestCalibrationRegistry:
         config = CalibrationConfig(
             projection=ProjectionConfig(enabled=True, projector_path=proj_path),
             whitening=WhiteningConfig(enabled=False),
+            camera_norm_paths={"cam_front": norm_path},
         )
         registry = CalibrationRegistry(config)
-        registry.register_camera("cam_front", normalizer)
 
         feats = {
-            "teacher_l1": np.random.randn(8, 8, 128).astype(np.float32),
-            "teacher_l2": np.random.randn(4, 4, 128).astype(np.float32),
-            "teacher_l3": np.random.randn(2, 2, 128).astype(np.float32),
+            "teacher": np.random.randn(8, 8, 384).astype(np.float32),
+            "student": np.random.randn(4, 4, 768).astype(np.float32),
+            "difference": np.random.randn(8, 8, 384).astype(np.float32),
         }
         result = registry.calibrate("cam_front", feats)
         assert result is not None

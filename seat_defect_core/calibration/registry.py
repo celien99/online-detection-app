@@ -37,6 +37,18 @@ class CalibrationRegistry:
 
     def _load_from_config(self) -> None:
         cfg = self.config
+        # 加载 per-camera normalizers
+        for camera_id, stats_path in cfg.camera_norm_paths.items():
+            if stats_path:
+                try:
+                    self.load_camera_normalizer(camera_id, stats_path)
+                except Exception:
+                    import logging
+                    _logger = logging.getLogger(__name__)
+                    _logger.warning(
+                        "calibration_normalizer_load_failed",
+                        extra={"camera_id": camera_id, "path": stats_path},
+                    )
         if cfg.projection.enabled and cfg.projection.projector_path:
             self._projector = EmbeddingProjector.load(cfg.projection.projector_path)
         if cfg.whitening.enabled and cfg.whitening.matrix_path:
@@ -84,11 +96,27 @@ class CalibrationRegistry:
     ) -> Optional[UnifiedEmbedding]:
         """执行完整校准链路：normalize → project → whiten → UnifiedEmbedding。
 
+        注意：projector 必须在归一化后的特征上拟合，否则投影结果无效。
+        如果 projector 已加载但对应 camera 的 normalizer 未注册，
+        归一化会原样返回（无操作），此时 project 接收原始特征。
+
         Returns:
             UnifiedEmbedding 如果 projection 可用，否则 None
         """
         if not self.config.enabled:
             return None
+
+        if self._projector is not None and camera_id not in self._normalizers:
+            import logging
+            _logger = logging.getLogger(__name__)
+            _logger.warning(
+                "calibration_projector_without_normalizer",
+                extra={
+                    "camera_id": camera_id,
+                    "hint": "projector 应在归一化后的特征上拟合，"
+                            "请为每个 camera 注册 CameraNormalizer",
+                },
+            )
 
         normalized = self.normalize(camera_id, features)
         vec = self.project(normalized)

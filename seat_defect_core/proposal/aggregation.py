@@ -10,6 +10,9 @@ def aggregate_proposals(proposals: list[PatchProposal],
                         area_exponent: float = 0.5,
                         confidence_threshold: float = 0.5) -> FilterResult | None:
     """Aggregate per-patch filter results into a single ROI-level decision."""
+    import logging
+
+    _logger = logging.getLogger(__name__)
     valid = [p for p in proposals if p.filter_result is not None]
     if not valid:
         return None
@@ -55,4 +58,8 @@ def aggregate_proposals(proposals: list[PatchProposal],
             },
         )
 
+    _logger.warning(
+        "aggregate_proposals_unknown_method",
+        extra={"method": method, "supported": ["max_confidence", "weighted_confidence"]},
+    )
     return None

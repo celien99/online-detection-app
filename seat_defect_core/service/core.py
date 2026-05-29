@@ -106,17 +106,26 @@ class InspectionService:
         self._calibration_registry = self._init_calibration()
 
     def _init_calibration(self) -> Optional[CalibrationRegistry]:
-        """从配置中初始化 CalibrationRegistry。"""
-        # 从 CameraConfig 中查找 calibration 配置
-        for camera in self.config.cameras:
-            if camera.calibration is not None:
-                return CalibrationRegistry(camera.calibration)
-        # 检查 seat_models 中的 camera 配置
+        """从配置中初始化 CalibrationRegistry，合并顶层 calibration 和 per-camera normalizer 路径。"""
+        all_cameras: list[CameraConfig] = list(self.config.cameras)
         for seat_model in self.config.seat_models:
-            for camera in seat_model.cameras:
-                if camera.calibration is not None:
-                    return CalibrationRegistry(camera.calibration)
-        return CalibrationRegistry(CalibrationConfig())
+            all_cameras.extend(seat_model.cameras)
+
+        # 以顶层 calibration 为基础，浅拷贝 camera_norm_paths 避免污染原配置
+        if self.config.calibration is not None:
+            cal_cfg = self.config.calibration
+            cal_cfg.camera_norm_paths = dict(cal_cfg.camera_norm_paths)
+        else:
+            cal_cfg = CalibrationConfig()
+
+        # 收集所有 per-camera normalizer 路径
+        for camera in all_cameras:
+            if camera.calibration is not None:
+                stats_path = camera.calibration.camera_norm.stats_path
+                if stats_path:
+                    cal_cfg.camera_norm_paths[camera.camera_id] = stats_path
+
+        return CalibrationRegistry(cal_cfg)
 
     @property
     def calibration(self) -> Optional[CalibrationRegistry]:
@@ -212,7 +221,9 @@ class AnomalyModelCache:
         if bundle is not None:
             return bundle
 
-        loaded = EfficientADService.load_bundle(camera.efficientad_model_path)
+        efficientad_config = camera.efficientad
+        efficientad_config.model_path = camera.efficientad_model_path
+        loaded = EfficientADService(efficientad_config)
         self._cache[cache_key] = loaded
         return loaded
 

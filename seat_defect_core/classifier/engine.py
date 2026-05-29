@@ -119,7 +119,7 @@ class FilterClassifierService:
                 diagnostics=diagnostics,
             )
 
-        except Exception as exc:
+        except Exception:
             diagnostics["total_ms"] = (perf_counter() - started_at) * 1000.0
             diagnostics["error_prediction_failed"] = 1.0
             return FilterClassifierResult(
@@ -136,7 +136,11 @@ class FilterClassifierService:
         ead_features: dict[str, np.ndarray] | None = None,
         unified_emb: list[float] | None = None,
     ) -> FilterClassifierResult:
-        """Predict with dual-modal input: patch image + EfficientAD features."""
+        """三模态推理：patch 图像 + EfficientAD 特征 + Unified Embedding。
+
+        所有三个输入均为必需参数——当特征或嵌入不可用时，
+        传入 zero tensor 以保证与 TorchScript 模型的参数签名一致。
+        """
         import torch
 
         if self._model is None:
@@ -148,19 +152,22 @@ class FilterClassifierService:
             )
 
         try:
+            input_size = self.config.input_size
+
             # Preprocess image: BGR -> RGB -> resize -> normalize
             rgb = cv2.cvtColor(patch_image, cv2.COLOR_BGR2RGB)
-            resized = cv2.resize(rgb, (self.config.input_size, self.config.input_size))
-            tensor = torch.from_numpy(resized).permute(2, 0, 1).float() / 255.0
-            tensor = (tensor - torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)) / \
-                     torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-            tensor = tensor.unsqueeze(0).to(self._device)
+            resized = cv2.resize(rgb, (input_size, input_size))
+            tensor = torch.from_numpy(resized).permute(2, 0, 1).float().to(self._device) / 255.0
+            mean = torch.as_tensor([0.485, 0.456, 0.406], device=self._device).view(3, 1, 1)
+            std = torch.as_tensor([0.229, 0.224, 0.225], device=self._device).view(3, 1, 1)
+            tensor = (tensor - mean) / std
+            tensor = tensor.unsqueeze(0)
 
-            # Preprocess EfficientAD features to torch tensors
-            feat_tensors = None
+            # Preprocess EfficientAD features → 始终产出 dict（不可用时用 zeros）
+            # 特征键名与 efficientad/engine.py:_extract_features() 产出保持一致
+            feat_tensors: dict[str, torch.Tensor] = {}
             if ead_features is not None:
-                feat_tensors = {}
-                for key in ["teacher_l1", "teacher_l2", "teacher_l3", "difference"]:
+                for key in ["teacher", "student", "difference"]:
                     if key in ead_features:
                         arr = ead_features[key]
                         t = torch.from_numpy(arr).float().to(self._device)
@@ -169,14 +176,24 @@ class FilterClassifierService:
                         elif t.dim() == 4:
                             t = t.permute(0, 3, 1, 2)  # NHWC -> NCHW
                         feat_tensors[key] = t
+            # 补全缺失的特征通道（feature dropout → zeros，与训练时语义一致）
+            for key in ["teacher", "student", "difference"]:
+                if key not in feat_tensors:
+                    ch = 384 if key in ("teacher", "difference") else 768
+                    feat_tensors[key] = torch.zeros(
+                        1, ch, 1, 1, device=self._device
+                    )
 
-            # Preprocess unified embedding
-            uni_tensor = None
+            # Preprocess unified embedding → 始终产出 tensor（不可用时用 zeros）
             if unified_emb is not None:
-                uni_tensor = torch.tensor(unified_emb, dtype=torch.float32).unsqueeze(0).to(self._device)
+                uni_tensor = torch.tensor(
+                    unified_emb, dtype=torch.float32, device=self._device
+                ).unsqueeze(0)
+            else:
+                uni_tensor = torch.zeros(1, 384, device=self._device)
 
             with torch.no_grad():
-                logits = self._model(tensor, feat_tensors if feat_tensors else None, uni_tensor)
+                logits = self._model(tensor, feat_tensors, uni_tensor)
 
             probs = torch.softmax(logits, dim=1)[0]
             false_alarm_score = float(probs[0].cpu())

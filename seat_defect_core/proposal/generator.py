@@ -115,9 +115,8 @@ class ProposalGenerator:
 
             feat_prefix = f"features/{isolation_key.replace('|', '/')}/{pid}"
             ead_feats = EfficientADFeatures(
-                teacher_l1_ref=f"{feat_prefix}/teacher_l1.npy" if efficientad_features else "",
-                teacher_l2_ref=f"{feat_prefix}/teacher_l2.npy" if efficientad_features else "",
-                teacher_l3_ref=f"{feat_prefix}/teacher_l3.npy" if efficientad_features else "",
+                teacher_ref=f"{feat_prefix}/teacher.npy" if efficientad_features else "",
+                student_ref=f"{feat_prefix}/student.npy" if efficientad_features else "",
                 difference_ref=f"{feat_prefix}/difference.npy" if efficientad_features else "",
             )
 

@@ -26,16 +26,21 @@ class BoundingBox:
 
 @dataclass
 class EfficientADFeatures:
-    """Multi-scale teacher features + student-teacher difference."""
+    """EfficientAD teacher/student 完整输出特征 + teacher-student 差异。
 
-    teacher_l1_ref: FeatureRef
-    teacher_l2_ref: FeatureRef
-    teacher_l3_ref: FeatureRef
+    通过 forward hook 捕获 teacher 和 student 网络的完整输出，
+    与 _extract_features() 产出的键名 (teacher, student, difference) 保持一致。
+    """
+
+    teacher_ref: FeatureRef
+    student_ref: FeatureRef
     difference_ref: FeatureRef
-    teacher_l1_shape: tuple[int, int, int] = (56, 56, 64)
-    teacher_l2_shape: tuple[int, int, int] = (28, 28, 128)
-    teacher_l3_shape: tuple[int, int, int] = (14, 14, 256)
-    difference_shape: tuple[int, int, int] = (224, 224, 64)
+    # teacher/student 输出通道数取决于 EfficientAdModel 的 teacher_out_channels 和 model_size
+    # teacher: (H, W, 384) for medium model with teacher_out_channels=384
+    # student: (H, W, 768) for medium model (内部自动计算)
+    teacher_shape: tuple[int, int, int] = (64, 64, 384)
+    student_shape: tuple[int, int, int] = (64, 64, 768)
+    difference_shape: tuple[int, int, int] = (64, 64, 384)
 
 
 @dataclass
@@ -102,3 +107,4 @@ class PatchProposal:
     efficientad_features: EfficientADFeatures
     proposal_metadata: ProposalMetadata
     filter_result: Optional[FilterResult] = None
+    identity_id: Optional[str] = None  # 由 DefectTracker 跨帧追踪时填充
