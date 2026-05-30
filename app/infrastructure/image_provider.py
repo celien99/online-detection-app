@@ -47,6 +47,7 @@ class CameraImageProvider(QQuickImageProvider):
         - _original: 同原始帧（NG 弹窗原图面板）
         - _heatmap: 异常热力图覆盖层
         """
+        image_id = image_id.split("?", 1)[0]
         base_id = image_id
         suffix = ""
         for s in ("_heatmap", "_original"):

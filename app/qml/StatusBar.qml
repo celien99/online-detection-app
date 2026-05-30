@@ -11,6 +11,11 @@ Rectangle {
     property int okCount: 0
     property int ngCount: 0
     property real tactRate: 0.0
+    property string lineStatus: "unknown"
+    property bool lineConnected: false
+    property bool lineBusy: false
+    property string lastTriggerResult: ""
+    property string triggerError: ""
 
     height: 52
     color: Theme.bgSecondary
@@ -72,6 +77,73 @@ Rectangle {
         }
 
         Rectangle { width: 1; height: 28; color: Theme.borderStrong }
+
+        Rectangle {
+            Layout.preferredWidth: lineText.implicitWidth + 24
+            Layout.preferredHeight: 28
+            radius: Theme.radiusSM
+            color: lineBusy ? Theme.statusWarningDim : Theme.bgTertiary
+            border {
+                width: 1
+                color: lineConnected ? Theme.statusOK : Theme.statusNG
+            }
+            Text {
+                id: lineText
+                anchors.centerIn: parent
+                text: lineConnected
+                      ? (lineBusy ? qsTr("线体 检测中") : qsTr("线体 ") + lineStatus)
+                      : qsTr("线体 未连接")
+                color: lineConnected ? Theme.textPrimary : Theme.statusNG
+                font.pixelSize: Theme.fontSizeXS
+                font.bold: true
+            }
+        }
+
+        Rectangle {
+            visible: lastTriggerResult !== ""
+            Layout.preferredWidth: resultText.implicitWidth + 20
+            Layout.preferredHeight: 28
+            radius: Theme.radiusSM
+            color: lastTriggerResult === "NG" ? Theme.statusNGDim
+                   : lastTriggerResult === "OK" ? Theme.statusOKDim
+                   : Theme.bgTertiary
+            border {
+                width: 1
+                color: lastTriggerResult === "NG" ? Theme.statusNG
+                       : lastTriggerResult === "OK" ? Theme.statusOK
+                       : Theme.borderDefault
+            }
+            Text {
+                id: resultText
+                anchors.centerIn: parent
+                text: qsTr("上次 ") + lastTriggerResult
+                color: lastTriggerResult === "NG" ? Theme.statusNG
+                       : lastTriggerResult === "OK" ? Theme.statusOK
+                       : Theme.textSecondary
+                font.pixelSize: Theme.fontSizeXS
+                font.bold: true
+            }
+        }
+
+        Rectangle {
+            visible: triggerError !== ""
+            Layout.preferredWidth: Math.min(errorText.implicitWidth + 20, 260)
+            Layout.preferredHeight: 28
+            radius: Theme.radiusSM
+            color: Theme.statusNGDim
+            border { width: 1; color: Theme.statusNG }
+            clip: true
+            Text {
+                id: errorText
+                anchors.centerIn: parent
+                width: parent.width - 16
+                text: qsTr("异常 ") + triggerError
+                color: Theme.statusNG
+                font.pixelSize: Theme.fontSizeXS
+                font.bold: true
+                elide: Text.ElideRight
+            }
+        }
 
         // OK count
         Text {

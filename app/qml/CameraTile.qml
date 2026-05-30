@@ -8,6 +8,7 @@ Rectangle {
     property string cameraStatus: "ok"
     property string defectLabel: ""
     property bool live: false
+    property int frameVersion: 0
 
     color: Theme.bgPrimary
     radius: Theme.radiusSM
@@ -21,7 +22,7 @@ Rectangle {
         id: cameraImage
         anchors.fill: parent
         anchors.margins: 4
-        source: "image://camera/" + cameraId
+        source: "image://camera/" + cameraId + "?v=" + frameVersion
         cache: false
         fillMode: Image.PreserveAspectFit
     }

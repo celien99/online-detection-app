@@ -4,7 +4,10 @@
     "station_id": "seat_inspection",
     "language": "zh-CN",
     "fullscreen": true,
-    "grid_layout": "2x2"
+    "grid_layout": "2x2",
+    "inspection_mode": "continuous",
+    "trigger_poll_interval_s": 0.05,
+    "capture_timeout_s": 2.0
   },
   "cameras": [
     {
@@ -39,6 +42,27 @@
     "port": 502,
     "defect_coil": 100,
     "stop_coil": 101
+  },
+  "line_signal": {
+    "enabled": false,
+    "type": "virtual",
+    "host": "127.0.0.1",
+    "port": 9100,
+    "timeout_s": 0.1,
+    "reconnect_interval_s": 2.0,
+    "capture_request_coil": 10,
+    "capture_ack_coil": 11,
+    "busy_coil": 12,
+    "done_coil": 13,
+    "ok_coil": 14,
+    "ng_coil": 15,
+    "reject_coil": 16,
+    "fault_coil": 17,
+    "line_status_register": 0,
+    "part_id_register": 20,
+    "seat_model_register": 40,
+    "defect_code_register": 60,
+    "fault_code_register": 61
   },
   "offline_platform": {
     "upload_base_url": "",

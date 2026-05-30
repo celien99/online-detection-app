@@ -44,6 +44,11 @@ class MainViewModel(QObject):
     ngCameraIdChanged = Signal()
     cameraListChanged = Signal()
     remainingSecondsChanged = Signal()
+    lineStatusChanged = Signal()
+    lineConnectedChanged = Signal()
+    lineBusyChanged = Signal()
+    lastTriggerResultChanged = Signal()
+    triggerErrorChanged = Signal()
 
     def __init__(
         self,
@@ -74,11 +79,24 @@ class MainViewModel(QObject):
         self._inspect_count = 0
         self._grid_layout = grid_layout
         self._last_ng_timestamp = 0.0
+        self._trigger_service: Any | None = None
+        self._line_status = "unknown"
+        self._line_connected = False
+        self._line_busy = False
+        self._last_trigger_result = ""
+        self._trigger_error = ""
+        self._last_camera_emit = 0.0
 
         self._camera_list: List[Dict[str, Any]] = []
         self._camera_index: Dict[str, Dict[str, Any]] = {}
         for cid in (camera_ids or []):
-            entry = {"cameraId": cid, "live": False, "status": "ok", "defectLabel": ""}
+            entry = {
+                "cameraId": cid,
+                "live": False,
+                "status": "ok",
+                "defectLabel": "",
+                "frameVersion": 0,
+            }
             self._camera_list.append(entry)
             self._camera_index[cid] = entry
 
@@ -98,6 +116,11 @@ class MainViewModel(QObject):
     def _get_ng_camera_id(self) -> str: return self._ng_camera_id
     def _get_camera_list(self) -> list: return self._camera_list
     def _get_remaining_seconds(self) -> int: return self._remaining_seconds
+    def _get_line_status(self) -> str: return self._line_status
+    def _get_line_connected(self) -> bool: return self._line_connected
+    def _get_line_busy(self) -> bool: return self._line_busy
+    def _get_last_trigger_result(self) -> str: return self._last_trigger_result
+    def _get_trigger_error(self) -> str: return self._trigger_error
 
     lineId = Property(str, _get_line_id, notify=lineIdChanged)
     systemStatus = Property(str, _get_system_status, notify=systemStatusChanged)
@@ -110,6 +133,11 @@ class MainViewModel(QObject):
     ngCameraId = Property(str, _get_ng_camera_id, notify=ngCameraIdChanged)
     cameraList = Property(list, _get_camera_list, notify=cameraListChanged)
     remainingSeconds = Property(int, _get_remaining_seconds, notify=remainingSecondsChanged)
+    lineStatus = Property(str, _get_line_status, notify=lineStatusChanged)
+    lineConnected = Property(bool, _get_line_connected, notify=lineConnectedChanged)
+    lineBusy = Property(bool, _get_line_busy, notify=lineBusyChanged)
+    lastTriggerResult = Property(str, _get_last_trigger_result, notify=lastTriggerResultChanged)
+    triggerError = Property(str, _get_trigger_error, notify=triggerErrorChanged)
 
     # ── Slots ──
 
@@ -125,18 +153,37 @@ class MainViewModel(QObject):
     def dismissFalseAlarm(self) -> None:
         self._alert.acknowledge(AlertAction.FALSE_ALARM)
 
+    @Slot()
+    def manualTrigger(self) -> None:
+        if self._trigger_service is not None:
+            self._trigger_service.manual_trigger()
+
+    @Slot()
+    def refreshTriggerState(self) -> None:
+        self._sync_trigger_state()
+
+    def set_trigger_service(self, trigger_service: Any) -> None:
+        self._trigger_service = trigger_service
+        self._system_status = "running"
+        self.systemStatusChanged.emit()
+        self._sync_trigger_state()
+
     # ── Internal ──
 
     def mark_cameras_live(self, camera_ids: List[str]) -> None:
         """标记哪些相机当前有帧输入。"""
         changed = False
+        now = time.time()
         for entry in self._camera_list:
             cid = entry["cameraId"]
             was_live = entry["live"]
             entry["live"] = cid in camera_ids
+            if entry["live"]:
+                entry["frameVersion"] = int(entry.get("frameVersion", 0)) + 1
             if entry["live"] != was_live:
                 changed = True
-        if changed:
+        if changed or now - self._last_camera_emit >= 0.1:
+            self._last_camera_emit = now
             self.cameraListChanged.emit()
 
     def update_from_result(self, response: Any) -> None:
@@ -220,9 +267,30 @@ class MainViewModel(QObject):
 
     def tick_countdown(self) -> None:
         """由 QML 定时器每秒调用，同步倒计时。"""
+        self._sync_trigger_state()
         current = self._alert.current_alert
         if current is not None and not current.acknowledged:
             secs = int(current.remaining_seconds)
             if secs != self._remaining_seconds:
                 self._remaining_seconds = secs
                 self.remainingSecondsChanged.emit()
+
+    def _sync_trigger_state(self) -> None:
+        if self._trigger_service is None:
+            return
+        state = self._trigger_service.get_state()
+        if self._line_status != state.line_status:
+            self._line_status = state.line_status
+            self.lineStatusChanged.emit()
+        if self._line_connected != state.connected:
+            self._line_connected = state.connected
+            self.lineConnectedChanged.emit()
+        if self._line_busy != state.busy:
+            self._line_busy = state.busy
+            self.lineBusyChanged.emit()
+        if self._last_trigger_result != state.last_result:
+            self._last_trigger_result = state.last_result
+            self.lastTriggerResultChanged.emit()
+        if self._trigger_error != state.last_error:
+            self._trigger_error = state.last_error
+            self.triggerErrorChanged.emit()

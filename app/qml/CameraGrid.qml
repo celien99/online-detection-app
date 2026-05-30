@@ -28,6 +28,7 @@ GridLayout {
             cameraStatus: modelData.status || "ok"
             defectLabel: modelData.defectLabel || ""
             live: modelData.live || false
+            frameVersion: modelData.frameVersion || 0
         }
     }
 }

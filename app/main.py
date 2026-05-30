@@ -22,6 +22,7 @@ from app.infrastructure.camera.mvs_adapter import MvsCameraAdapter
 from app.infrastructure.camera.rtsp_adapter import RTSPCameraAdapter
 from app.infrastructure.config_store import ConfigStore
 from app.infrastructure.image_provider import CameraImageProvider
+from app.infrastructure.line_signal import LabVIEWTcpLineSignalAdapter, ModbusLineSignalAdapter, VirtualLineSignalAdapter
 from app.infrastructure.plc.interface import PLCInterface, DefectSignal, Severity
 from app.infrastructure.plc.modbus_adapter import ModbusTCPAdapter
 from app.infrastructure.plc.virtual_plc import VirtualPLC
@@ -30,6 +31,7 @@ from app.services.hot_reload_service import HotReloadService
 from app.services.inspection_service import InspectionService
 from app.services.log_engine import LogEngine
 from app.services.stats_collector import InspectionRecord, StatsCollector
+from app.services.trigger_service import TriggerService
 from app.viewmodels.log_viewmodel import LogViewModel
 from app.viewmodels.main_viewmodel import MainViewModel
 from app.viewmodels.review_viewmodel import ReviewViewModel
@@ -69,6 +71,21 @@ def _create_plc(plc_config: Dict[str, Any]) -> PLCInterface:
         defect_coil=plc_config.get("defect_coil", 100),
         stop_coil=plc_config.get("stop_coil", 101),
     )
+
+
+def _create_line_signal(line_config: Dict[str, Any], plc_config: Dict[str, Any]):
+    if not line_config.get("enabled", False):
+        return VirtualLineSignalAdapter()
+    adapter_type = line_config.get("type", "modbus")
+    if adapter_type == "modbus":
+        merged_config = dict(plc_config)
+        merged_config.update(line_config)
+        return ModbusLineSignalAdapter(merged_config)
+    if adapter_type == "labview_tcp":
+        return LabVIEWTcpLineSignalAdapter(line_config)
+    if adapter_type == "virtual":
+        return VirtualLineSignalAdapter()
+    raise ValueError(f"Unsupported line signal adapter type: {adapter_type}")
 
 
 class QmlHotReload:
@@ -138,6 +155,7 @@ def main(config_path: str | None = None) -> int:
     app_config = config.get_app_config()
     alert_config = config.get_alert_config()
     offline_config = config.get_offline_platform_config()
+    runtime_mode = app_config.get("inspection_mode", "continuous")
 
     # ── Persistence ──
     storage_cfg = config.get_storage_config()
@@ -158,7 +176,9 @@ def main(config_path: str | None = None) -> int:
 
     # ── Infrastructure ──
     camera_manager = CameraManager()
-    plc = _create_plc(config.get_plc_config())
+    plc_config = config.get_plc_config()
+    plc = _create_plc(plc_config)
+    line_signal = _create_line_signal(config.get("line_signal", default={}), plc_config)
     log_engine = LogEngine(
         db_path=str(Path(config.get_storage_config().get("log_dir", "./logs")) / "inspection.db"),
         retention_days=config.get_storage_config().get("log_retention_days", 30),
@@ -205,6 +225,10 @@ def main(config_path: str | None = None) -> int:
         plc.connect()
     except Exception:
         pass
+    try:
+        line_signal.connect()
+    except Exception:
+        pass
 
     # ── Start camera watchdog ──
     camera_manager.start_watchdog()
@@ -246,7 +270,7 @@ def main(config_path: str | None = None) -> int:
         main_vm._camera_index.clear()
         for idx, cam_cfg in enumerate(cameras):
             cid = cam_cfg["camera_id"]
-            entry = {"cameraId": cid, "live": False, "status": "ok", "defectLabel": ""}
+            entry = {"cameraId": cid, "live": False, "status": "ok", "defectLabel": "", "frameVersion": 0}
             main_vm._camera_list.append(entry)
             main_vm._camera_index[cid] = entry
         main_vm.cameraListChanged.emit()
@@ -313,6 +337,35 @@ def main(config_path: str | None = None) -> int:
 
     # ── Inspection Loop ──
     running = True
+    trigger_service: TriggerService | None = None
+
+    def _handle_inspection_response(response: Any, frames: dict) -> None:
+        for cid, frame in frames.items():
+            image_provider.update_frame(cid, frame)
+
+        main_vm.mark_cameras_live(list(frames.keys()))
+
+        if hasattr(response, 'result') and hasattr(response.result, 'camera_results'):
+            for cr in response.result.camera_results:
+                record = InspectionRecord(
+                    timestamp=time.time(),
+                    camera_id=cr.camera_id,
+                    status=cr.status,
+                    reason=cr.reason or "",
+                    defect_type=getattr(cr.filter_result, 'class_name', '') if hasattr(cr, 'filter_result') and cr.filter_result else '',
+                    confidence=float(cr.texture_result.score) if hasattr(cr, 'texture_result') and cr.texture_result else 0.0,
+                )
+                stats_collector.record(record)
+                log_engine.insert(record)
+                if cr.status == "NG":
+                    severity = Severity.CRITICAL if getattr(cr, 'severity', '') == 'critical' else Severity.MINOR
+                    plc.send_defect_signal(DefectSignal(camera_id=cr.camera_id, severity=severity))
+                    if hasattr(cr, 'texture_result') and cr.texture_result is not None:
+                        amap = getattr(cr.texture_result, 'anomaly_map', None)
+                        if amap is not None:
+                            image_provider.update_heatmap(cr.camera_id, amap)
+
+        main_vm.update_from_result(response)
 
     def inspection_loop() -> None:
         nonlocal running
@@ -325,36 +378,9 @@ def main(config_path: str | None = None) -> int:
                     time.sleep(0.01)
                     continue
 
-                for cid, frame in valid_frames.items():
-                    image_provider.update_frame(cid, frame)
-
-                main_vm.mark_cameras_live(list(valid_frames.keys()))
-
                 future = inspection_service.inspect_async(valid_frames)
                 response = future.result(timeout=5.0)
-
-                if hasattr(response, 'result') and hasattr(response.result, 'camera_results'):
-                    for cr in response.result.camera_results:
-                        record = InspectionRecord(
-                            timestamp=time.time(),
-                            camera_id=cr.camera_id,
-                            status=cr.status,
-                            reason=cr.reason or "",
-                            defect_type=getattr(cr.filter_result, 'class_name', '') if hasattr(cr, 'filter_result') and cr.filter_result else '',
-                            confidence=float(cr.texture_result.score) if hasattr(cr, 'texture_result') and cr.texture_result else 0.0,
-                        )
-                        stats_collector.record(record)
-                        log_engine.insert(record)
-                        if cr.status == "NG":
-                            severity = Severity.CRITICAL if getattr(cr, 'severity', '') == 'critical' else Severity.MINOR
-                            plc.send_defect_signal(DefectSignal(camera_id=cr.camera_id, severity=severity))
-                            # 存储异常热力图到 ImageProvider 供 NGOverlay 使用
-                            if hasattr(cr, 'texture_result') and cr.texture_result is not None:
-                                amap = getattr(cr.texture_result, 'anomaly_map', None)
-                                if amap is not None:
-                                    image_provider.update_heatmap(cr.camera_id, amap)
-
-                main_vm.update_from_result(response)
+                _handle_inspection_response(response, valid_frames)
 
             except Exception as exc:
                 # Fail-safe: treat inference failure as potential defect so no
@@ -372,8 +398,21 @@ def main(config_path: str | None = None) -> int:
                 main_vm.update_stats_from_collector()
                 time.sleep(0.1)
 
-    thread = threading.Thread(target=inspection_loop, daemon=True, name="inspection-loop")
-    thread.start()
+    if runtime_mode == "triggered":
+        trigger_service = TriggerService(
+            adapter=line_signal,
+            camera_manager=camera_manager,
+            inspection_service=inspection_service,
+            handle_response=_handle_inspection_response,
+            mode=runtime_mode,
+            poll_interval_s=float(app_config.get("trigger_poll_interval_s", 0.05)),
+            capture_timeout_s=float(app_config.get("capture_timeout_s", 2.0)),
+        )
+        main_vm.set_trigger_service(trigger_service)
+        trigger_service.start()
+    else:
+        thread = threading.Thread(target=inspection_loop, daemon=True, name="inspection-loop")
+        thread.start()
 
     # ── Timeout checker timer ──
     timer = QTimer()
@@ -391,7 +430,10 @@ def main(config_path: str | None = None) -> int:
             _qml_watcher.stop()
         camera_manager.stop_watchdog()
         hot_reload.stop()
+        if trigger_service is not None:
+            trigger_service.stop()
         camera_manager.disconnect_all()
+        line_signal.disconnect()
         plc.disconnect()
         inspection_service.shutdown()
 
