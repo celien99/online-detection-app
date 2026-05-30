@@ -19,6 +19,7 @@ ApplicationWindow {
     property var reviewViewModel: null
     property var seatModelViewModel: null
     property var modelDeployViewModel: null
+    property var diagnosticsViewModel: null
 
     // ── Header ──
     header: Rectangle {
@@ -76,6 +77,9 @@ ApplicationWindow {
                     }
                     if (currentIndex === 6 && window.modelDeployViewModel) {
                         window.modelDeployViewModel.checkPlatformHealth();
+                    }
+                    if (currentIndex === 7 && window.diagnosticsViewModel) {
+                        window.diagnosticsViewModel.refresh();
                     }
                 }
 
@@ -233,6 +237,28 @@ ApplicationWindow {
                         }
                     }
                 }
+                TabButton {
+                    id: diagnosticsTab
+                    text: qsTr("自检")
+                    implicitHeight: 48
+                    contentItem: Text {
+                        text: diagnosticsTab.text
+                        color: diagnosticsTab.checked ? Theme.accent : Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeSM
+                        font.bold: diagnosticsTab.checked
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        color: "transparent"
+                        Rectangle {
+                            width: parent.width
+                            height: 2
+                            anchors.bottom: parent.bottom
+                            color: diagnosticsTab.checked ? Theme.accent : "transparent"
+                        }
+                    }
+                }
             }
         }
     }
@@ -268,6 +294,9 @@ ApplicationWindow {
         }
         ModelDeployScreen {
             viewModel: window.modelDeployViewModel
+        }
+        DiagnosticsScreen {
+            viewModel: window.diagnosticsViewModel
         }
     }
 }

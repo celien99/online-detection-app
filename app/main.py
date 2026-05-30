@@ -37,6 +37,7 @@ from app.viewmodels.main_viewmodel import MainViewModel
 from app.viewmodels.review_viewmodel import ReviewViewModel
 from app.viewmodels.settings_viewmodel import SettingsViewModel
 from app.viewmodels.stats_viewmodel import StatsViewModel
+from app.viewmodels.diagnostics_viewmodel import DiagnosticsViewModel
 from app.services.config_persistence import ConfigPersistenceService
 from app.services.seat_model_service import SeatModelService
 from app.services.model_file_service import ModelFileService
@@ -262,6 +263,7 @@ def main(config_path: str | None = None) -> int:
     stats_vm = StatsViewModel(stats_collector)
     settings_vm = SettingsViewModel(config, persistence)
     review_vm = ReviewViewModel(log_engine)
+    diagnostics_vm = DiagnosticsViewModel(config, config_path)
 
     def _on_seat_model_switch(new_model_id: str) -> None:
         cameras = seat_model_service.get_cameras_as_config_list(new_model_id)
@@ -302,6 +304,7 @@ def main(config_path: str | None = None) -> int:
     root.setProperty("reviewViewModel", review_vm)
     root.setProperty("seatModelViewModel", seat_model_vm)
     root.setProperty("modelDeployViewModel", model_deploy_vm)
+    root.setProperty("diagnosticsViewModel", diagnostics_vm)
 
     # ── QML hot reload (dev mode) ──
     if dev_mode:
@@ -326,6 +329,7 @@ def main(config_path: str | None = None) -> int:
             new_root.setProperty("reviewViewModel", review_vm)
             new_root.setProperty("seatModelViewModel", seat_model_vm)
             new_root.setProperty("modelDeployViewModel", model_deploy_vm)
+            new_root.setProperty("diagnosticsViewModel", diagnostics_vm)
             print("[hot-reload] QML reloaded")
 
         _reload_timer = QTimer()
