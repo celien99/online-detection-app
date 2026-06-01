@@ -191,12 +191,45 @@ mvs_list_exe = EXE(
     entitlements_file=None,
 )
 
+site_report = Analysis(
+    ["app/site_report.py"],
+    pathex=[str(ROOT)],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+site_report_pyz = PYZ(site_report.pure)
+site_report_exe = EXE(
+    site_report_pyz,
+    site_report.scripts,
+    [],
+    exclude_binaries=True,
+    name="OnlineDetectionSiteReport",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
 coll = COLLECT(
     gui_exe,
     diagnostics_exe,
     camera_check_exe,
     line_check_exe,
     mvs_list_exe,
+    site_report_exe,
     gui.binaries,
     gui.datas,
     diagnostics.binaries,
@@ -207,6 +240,8 @@ coll = COLLECT(
     line_check.datas,
     mvs_list.binaries,
     mvs_list.datas,
+    site_report.binaries,
+    site_report.datas,
     strip=False,
     upx=True,
     upx_exclude=[],

@@ -46,6 +46,7 @@ $RequiredPaths = @(
     "OnlineDetectionCameraCheck.exe",
     "OnlineDetectionLineCheck.exe",
     "OnlineDetectionMvsList.exe",
+    "OnlineDetectionSiteReport.exe",
     "config.json",
     "app/qml/main.qml",
     "app/resources/styles/theme.qml",
@@ -101,6 +102,10 @@ if not exist "OnlineDetectionMvsList.exe" (
   echo Missing OnlineDetectionMvsList.exe
   exit /b 1
 )
+if not exist "OnlineDetectionSiteReport.exe" (
+  echo Missing OnlineDetectionSiteReport.exe
+  exit /b 1
+)
 if not exist "config.json" (
   echo Missing config.json
   exit /b 1
@@ -139,7 +144,13 @@ setlocal
 cd /d "%~dp0"
 OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples
 "@
-    "05_start_app.bat" = @"
+    "05_collect_site_report.bat" = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples
+"@
+    "06_start_app.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
@@ -164,7 +175,8 @@ OnlineDetectionApp deployment
 6. Run 02_check_line_signal.bat.
 7. Run 03_list_mvs_cameras.bat if camera serial numbers need to be confirmed.
 8. Run 04_check_cameras.bat.
-9. Run 05_start_app.bat.
+9. Run 05_collect_site_report.bat and send site_report.json plus camera_samples\ if troubleshooting is needed.
+10. Run 06_start_app.bat.
 
 Run diagnostics before production:
    OnlineDetectionDiagnostics.exe --config config.json
@@ -176,6 +188,9 @@ Check cameras:
 Check PLC / line signal:
    OnlineDetectionLineCheck.exe --config config.json
    OnlineDetectionLineCheck.exe --config config.json --wait-trigger --timeout-s 10
+
+Collect site report:
+   OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples
 
 Main GUI:
    OnlineDetectionApp.exe
@@ -193,7 +208,8 @@ $GeneratedFiles = @(
     "02_check_line_signal.bat",
     "03_list_mvs_cameras.bat",
     "04_check_cameras.bat",
-    "05_start_app.bat"
+    "05_collect_site_report.bat",
+    "06_start_app.bat"
 )
 $ManifestItems = foreach ($relativePath in $RequiredPaths + $GeneratedFiles) {
     $fullPath = Join-Path $DistRoot $relativePath

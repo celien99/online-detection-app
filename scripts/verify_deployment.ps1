@@ -10,6 +10,7 @@ $RequiredPaths = @(
     "OnlineDetectionCameraCheck.exe",
     "OnlineDetectionLineCheck.exe",
     "OnlineDetectionMvsList.exe",
+    "OnlineDetectionSiteReport.exe",
     "config.json",
     "app/qml/main.qml",
     "app/resources/styles/theme.qml",
@@ -28,7 +29,8 @@ $RequiredPaths = @(
     "02_check_line_signal.bat",
     "03_list_mvs_cameras.bat",
     "04_check_cameras.bat",
-    "05_start_app.bat"
+    "05_collect_site_report.bat",
+    "06_start_app.bat"
 )
 
 foreach ($relativePath in $RequiredPaths) {
