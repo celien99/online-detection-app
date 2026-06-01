@@ -168,6 +168,7 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
         self._last_connect_attempt = 0.0
         self._last_request_state = False
         self._last_request_id = 0
+        self._last_error = ""
 
     @property
     def enabled(self) -> bool:
@@ -177,6 +178,10 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
     def connected(self) -> bool:
         return self._connected
 
+    @property
+    def last_error(self) -> str:
+        return self._last_error
+
     def connect(self) -> None:
         if self._client_factory is None:
             from pymodbus.client import ModbusTcpClient
@@ -184,9 +189,12 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
             self._client_factory = lambda host, port: ModbusTcpClient(host, port=port)
 
         self.disconnect()
+        self._last_error = ""
         self._last_connect_attempt = time.time()
         self._client = self._client_factory(self._host, self._port)
         self._connected = bool(self._client.connect())
+        if not self._connected:
+            self._last_error = f"Failed to connect Modbus TCP {self._host}:{self._port}"
 
     def disconnect(self) -> None:
         if self._client is not None:
@@ -230,16 +238,28 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
         if not self._ensure_connected():
             return
         self._write_register(self._defect_code_register, int(result.defect_code))
+        if not self._connected:
+            return
         self._clear_result_coils()
+        if not self._connected:
+            return
         self._write_coil(self._ok_coil, result.status == InspectionDecision.OK)
+        if not self._connected:
+            return
         self._write_coil(self._ng_coil, result.status == InspectionDecision.NG)
+        if not self._connected:
+            return
         self._write_coil(self._reject_coil, result.status == InspectionDecision.REJECT)
+        if not self._connected:
+            return
         self._pulse_coil(self._done_coil)
 
     def send_fault(self, request: CaptureRequest | None, code: str, message: str) -> None:
         if not self._ensure_connected():
             return
         self._write_register(self._fault_code_register, _fault_code_to_int(code))
+        if not self._connected:
+            return
         self._pulse_coil(self._fault_coil)
 
     def read_line_status(self) -> LineStatus:
@@ -258,6 +278,8 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
 
     def _pulse_coil(self, address: int) -> None:
         self._write_coil(address, True)
+        if not self._connected:
+            return
         if self._pulse_width_s > 0:
             time.sleep(self._pulse_width_s)
         self._write_coil(address, False)
@@ -288,7 +310,11 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
 
     def _clear_result_coils(self) -> None:
         self._write_coil(self._ok_coil, False)
+        if not self._connected:
+            return
         self._write_coil(self._ng_coil, False)
+        if not self._connected:
+            return
         self._write_coil(self._reject_coil, False)
 
     def _read_coils(self, address: int, count: int):
@@ -307,19 +333,31 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
 
     def _write_coil(self, address: int, value: bool) -> None:
         try:
-            self._client.write_coil(address, value)
-        except Exception:
+            result = self._client.write_coil(address, value)
+            if _is_modbus_error(result):
+                self._last_error = f"Modbus write_coil failed address={address} value={value}"
+                self.disconnect()
+        except Exception as exc:
+            self._last_error = f"Modbus write_coil failed address={address} value={value}: {exc}"
             self.disconnect()
 
     def _write_register(self, address: int, value: int) -> None:
         try:
-            self._client.write_register(address, value)
-        except Exception:
+            result = self._client.write_register(address, value)
+            if _is_modbus_error(result):
+                self._last_error = f"Modbus write_register failed address={address} value={value}"
+                self.disconnect()
+        except Exception as exc:
+            self._last_error = f"Modbus write_register failed address={address} value={value}: {exc}"
             self.disconnect()
 
 
 def _fault_code_to_int(code: str) -> int:
     return abs(hash(code)) % 32767 or 1
+
+
+def _is_modbus_error(result) -> bool:
+    return result is not None and hasattr(result, "isError") and result.isError()
 
 
 class LabVIEWTcpLineSignalAdapter(LineSignalAdapter):

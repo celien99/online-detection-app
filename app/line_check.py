@@ -215,6 +215,9 @@ def _send_test_result_if_requested(
             reason="manual_line_check",
         )
     )
+    last_error = str(getattr(adapter, "last_error", "") or "")
+    if last_error:
+        return last_error
     if not adapter.connected:
         return f"Sent test result {status}, but adapter disconnected before completion"
     return ""

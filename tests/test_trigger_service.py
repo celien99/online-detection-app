@@ -313,3 +313,27 @@ def test_modbus_adapter_reconnects_after_write_failure() -> None:
     assert status.value == "running"
     assert adapter.connected
     assert FakeModbusClient.connect_calls >= 2
+
+
+def test_modbus_adapter_records_error_response_on_result_write() -> None:
+    class ErrorResponseClient(FakeModbusClient):
+        def write_register(self, address: int, value: int):
+            return FakeModbusResult(error=True)
+
+    FakeModbusClient.connect_calls = 0
+    FakeModbusClient.instances = []
+    adapter = ModbusLineSignalAdapter(
+        {"reconnect_interval_s": 0, "pulse_width_s": 0, "defect_code_register": 60},
+        client_factory=ErrorResponseClient,
+    )
+    adapter.connect()
+    adapter.send_result(
+        InspectionResultSignal(
+            request_id="REQ1",
+            status=InspectionDecision.NG,
+            defect_code=7,
+        )
+    )
+
+    assert not adapter.connected
+    assert "write_register failed address=60" in adapter.last_error

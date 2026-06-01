@@ -139,6 +139,55 @@ def test_line_check_fails_when_test_result_disconnects_adapter(monkeypatch) -> N
     assert "adapter disconnected" in result.message
 
 
+def test_line_check_fails_when_test_result_reports_last_error(monkeypatch) -> None:
+    class ErroringAdapter:
+        enabled = True
+
+        def __init__(self) -> None:
+            self._connected = False
+            self.last_error = ""
+
+        @property
+        def connected(self):
+            return self._connected
+
+        def connect(self):
+            self._connected = True
+
+        def disconnect(self):
+            self._connected = False
+
+        def poll_capture_request(self):
+            return None
+
+        def send_busy(self, request, busy):
+            pass
+
+        def send_result(self, result):
+            self.last_error = "Modbus write_register failed address=60 value=42"
+
+        def send_fault(self, request, code, message):
+            pass
+
+        def read_line_status(self):
+            from app.infrastructure.plc.interface import LineStatus
+
+            return LineStatus.RUNNING
+
+    monkeypatch.setattr("app.line_check.create_line_signal", lambda line_config, plc_config: ErroringAdapter())
+
+    result = check_line_signal(
+        line_config={"enabled": True, "type": "modbus"},
+        plc_config={},
+        send_test_result="NG",
+        defect_code=42,
+    )
+
+    assert result.status == "FAIL"
+    assert result.connected is True
+    assert "write_register failed address=60" in result.message
+
+
 def test_line_check_cli_reads_config_and_restores_cwd(tmp_path: Path, monkeypatch, capsys) -> None:
     site_dir = tmp_path / "site"
     site_dir.mkdir()
