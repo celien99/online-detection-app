@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from app import mvs_list
+from app.infrastructure.line_signal import InspectionDecision
 from app.infrastructure.camera.mvs.camera_controller import MvsDeviceInfo
 from app.site_report import main as site_report_main
 
@@ -111,3 +112,77 @@ def test_site_report_returns_failure_when_camera_check_fails(tmp_path: Path, mon
     payload = json.loads((tmp_path / "site_report.json").read_text(encoding="utf-8"))
     assert payload["status"] == "FAIL"
     assert payload["camera_check"]["items"][0]["status"] == "FAIL"
+
+
+def test_site_report_can_send_line_test_result(tmp_path: Path, monkeypatch, capsys) -> None:
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "continuous"},
+            "cameras": [],
+            "line_signal": {"enabled": True, "type": "virtual"},
+            "storage": {"log_dir": ".", "screenshot_dir": "."},
+        },
+    )
+    sent_results = []
+
+    class CapturingVirtualAdapter:
+        enabled = True
+
+        def __init__(self) -> None:
+            from app.infrastructure.line_signal import VirtualLineSignalAdapter
+
+            self._inner = VirtualLineSignalAdapter()
+
+        @property
+        def connected(self):
+            return self._inner.connected
+
+        def connect(self):
+            self._inner.connect()
+
+        def disconnect(self):
+            self._inner.disconnect()
+
+        def poll_capture_request(self):
+            return self._inner.poll_capture_request()
+
+        def send_busy(self, request, busy):
+            self._inner.send_busy(request, busy)
+
+        def send_result(self, result):
+            sent_results.append(result)
+            self._inner.send_result(result)
+
+        def send_fault(self, request, code, message):
+            self._inner.send_fault(request, code, message)
+
+        def read_line_status(self):
+            return self._inner.read_line_status()
+
+    monkeypatch.setattr("app.line_check.create_line_signal", lambda line_config, plc_config: CapturingVirtualAdapter())
+    monkeypatch.setattr(mvs_list, "list_mvs_devices", lambda: [])
+    monkeypatch.setattr(mvs_list, "describe_mvs_sdk_candidates", lambda path: [str(path)])
+
+    exit_code = site_report_main(
+        [
+            "--config",
+            str(config_path),
+            "--output",
+            "site_report.json",
+            "--skip-camera-check",
+            "--send-test-result",
+            "NG",
+            "--defect-code",
+            "88",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert payload["line_signal"]["test_result_sent"] == "NG"
+    assert payload["line_signal"]["defect_code"] == 88
+    assert sent_results[0].status == InspectionDecision.NG
+    assert sent_results[0].defect_code == 88

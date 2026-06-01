@@ -33,6 +33,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--wait-trigger", action="store_true", help="Wait for one line capture request")
     parser.add_argument("--line-timeout-s", type=float, default=5.0, help="Timeout when waiting for a line trigger")
     parser.add_argument("--line-poll-interval-s", type=float, default=0.05, help="Line trigger polling interval")
+    parser.add_argument(
+        "--send-test-result",
+        choices=["OK", "NG", "REJECT"],
+        default="",
+        help="Send one test line result while collecting the report",
+    )
+    parser.add_argument("--defect-code", type=int, default=9001, help="Defect code used with --send-test-result")
     parser.add_argument("--json", action="store_true", help="Also print machine-readable JSON")
     args = parser.parse_args(argv)
 
@@ -57,6 +64,8 @@ def main(argv: list[str] | None = None) -> int:
             wait_trigger=args.wait_trigger,
             line_timeout_s=max(0.0, args.line_timeout_s),
             line_poll_interval_s=max(0.001, args.line_poll_interval_s),
+            send_test_result=args.send_test_result,
+            defect_code=max(0, args.defect_code),
         )
         output_path = _resolve_output_path(Path(args.output))
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -83,6 +92,8 @@ def collect_site_report(
     wait_trigger: bool = False,
     line_timeout_s: float = 5.0,
     line_poll_interval_s: float = 0.05,
+    send_test_result: str = "",
+    defect_code: int = 9001,
 ) -> dict[str, Any]:
     diagnostics = ProductionDiagnostics(config, config_path).run().to_dict()
     line_signal = asdict(
@@ -92,6 +103,8 @@ def collect_site_report(
             wait_trigger=wait_trigger,
             timeout_s=line_timeout_s,
             poll_interval_s=line_poll_interval_s,
+            send_test_result=send_test_result,
+            defect_code=defect_code,
         )
     )
     mvs_devices = _collect_mvs_devices(skip=skip_mvs_list)

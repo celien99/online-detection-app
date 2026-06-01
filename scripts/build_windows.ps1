@@ -153,25 +153,32 @@ setlocal
 cd /d "%~dp0"
 OnlineDetectionLineCheck.exe --config config.json
 "@
-    "03_list_mvs_cameras.bat" = @"
+    "03_send_plc_ng_test.bat" = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+echo This sends one NG test result to PLC/result points.
+OnlineDetectionLineCheck.exe --config config.json --send-test-result NG --defect-code 9001
+"@
+    "04_list_mvs_cameras.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
 OnlineDetectionMvsList.exe
 "@
-    "04_check_cameras.bat" = @"
+    "05_check_cameras.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
 OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples
 "@
-    "05_collect_site_report.bat" = @"
+    "06_collect_site_report.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
 OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples
 "@
-    "06_start_app.bat" = @"
+    "07_start_app.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
@@ -195,10 +202,11 @@ OnlineDetectionApp deployment
 5. Run 00_verify_deployment.bat.
 6. Run 01_run_diagnostics.bat.
 7. Run 02_check_line_signal.bat.
-8. Run 03_list_mvs_cameras.bat if camera serial numbers need to be confirmed.
-9. Run 04_check_cameras.bat.
-10. Run 05_collect_site_report.bat and send site_report.json plus camera_samples\ if troubleshooting is needed.
-11. Run 06_start_app.bat.
+8. Run 03_send_plc_ng_test.bat with the PLC engineer watching ng_coil, done_coil, and defect_code_register.
+9. Run 04_list_mvs_cameras.bat if camera serial numbers need to be confirmed.
+10. Run 05_check_cameras.bat.
+11. Run 06_collect_site_report.bat and send site_report.json plus camera_samples\ if troubleshooting is needed.
+12. Run 07_start_app.bat.
 
 Run diagnostics before production:
    OnlineDetectionDiagnostics.exe --config config.json
@@ -213,6 +221,7 @@ Check cameras:
 Check PLC / line signal:
    OnlineDetectionLineCheck.exe --config config.json
    OnlineDetectionLineCheck.exe --config config.json --wait-trigger --timeout-s 10
+   OnlineDetectionLineCheck.exe --config config.json --send-test-result NG --defect-code 9001
 
 Collect site report:
    OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples
@@ -232,10 +241,11 @@ $GeneratedFiles = @(
     "00_verify_deployment.bat",
     "01_run_diagnostics.bat",
     "02_check_line_signal.bat",
-    "03_list_mvs_cameras.bat",
-    "04_check_cameras.bat",
-    "05_collect_site_report.bat",
-    "06_start_app.bat"
+    "03_send_plc_ng_test.bat",
+    "04_list_mvs_cameras.bat",
+    "05_check_cameras.bat",
+    "06_collect_site_report.bat",
+    "07_start_app.bat"
 )
 $ManifestItems = foreach ($relativePath in $RequiredPaths + $GeneratedFiles) {
     $fullPath = Join-Path $DistRoot $relativePath

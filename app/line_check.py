@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from app.infrastructure.config_store import ConfigStore
+from app.infrastructure.line_signal import InspectionDecision, InspectionResultSignal
 from app.infrastructure.line_signal_factory import create_line_signal
 from app.runtime_paths import chdir_to_config_dir, resolve_config_path
 
@@ -24,6 +25,8 @@ class LineCheckResult:
     request_id: str = ""
     part_id: str = ""
     seat_model_id: str = ""
+    test_result_sent: str = ""
+    defect_code: int = 0
     elapsed_ms: int = 0
 
 
@@ -33,6 +36,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--wait-trigger", action="store_true", help="Wait for one capture request")
     parser.add_argument("--timeout-s", type=float, default=5.0, help="Timeout when waiting for a trigger")
     parser.add_argument("--poll-interval-s", type=float, default=0.05, help="Polling interval while waiting for a trigger")
+    parser.add_argument(
+        "--send-test-result",
+        choices=[decision.value for decision in InspectionDecision],
+        default="",
+        help="Send one test result to the PLC/result adapter after the connectivity check",
+    )
+    parser.add_argument("--defect-code", type=int, default=9001, help="Defect code used with --send-test-result")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     args = parser.parse_args(argv)
 
@@ -51,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
             wait_trigger=args.wait_trigger,
             timeout_s=max(0.0, args.timeout_s),
             poll_interval_s=max(0.001, args.poll_interval_s),
+            send_test_result=args.send_test_result,
+            defect_code=max(0, args.defect_code),
         )
     finally:
         os.chdir(original_cwd)
@@ -69,6 +81,8 @@ def check_line_signal(
     wait_trigger: bool = False,
     timeout_s: float = 5.0,
     poll_interval_s: float = 0.05,
+    send_test_result: str = "",
+    defect_code: int = 9001,
 ) -> LineCheckResult:
     started = time.time()
     adapter_type = str(line_config.get("type", "virtual" if not line_config.get("enabled", False) else "modbus"))
@@ -87,12 +101,15 @@ def check_line_signal(
                 elapsed_ms=_elapsed_ms(started),
             )
         if not wait_trigger:
+            _send_test_result_if_requested(adapter, send_test_result, defect_code)
             return LineCheckResult(
                 status="OK",
-                message="Line signal adapter connected",
+                message=_connected_message(send_test_result),
                 adapter_type=adapter_type,
                 connected=True,
                 line_status=line_status,
+                test_result_sent=send_test_result,
+                defect_code=defect_code if send_test_result else 0,
                 elapsed_ms=_elapsed_ms(started),
             )
         deadline = time.time() + timeout_s
@@ -111,15 +128,18 @@ def check_line_signal(
                 line_status=line_status,
                 elapsed_ms=_elapsed_ms(started),
             )
+        _send_test_result_if_requested(adapter, send_test_result, defect_code, request_id=request.request_id, part_id=request.part_id)
         return LineCheckResult(
             status="OK",
-            message="Received capture request",
+            message=_trigger_message(send_test_result),
             adapter_type=adapter_type,
             connected=adapter.connected,
             line_status=line_status,
             request_id=request.request_id,
             part_id=request.part_id,
             seat_model_id=request.seat_model_id or "",
+            test_result_sent=send_test_result,
+            defect_code=defect_code if send_test_result else 0,
             elapsed_ms=_elapsed_ms(started),
         )
     except Exception as exc:
@@ -142,6 +162,42 @@ def _elapsed_ms(started: float) -> int:
     return int((time.time() - started) * 1000)
 
 
+def _send_test_result_if_requested(
+    adapter,
+    status: str,
+    defect_code: int,
+    *,
+    request_id: str = "line-check-test",
+    part_id: str = "LINE_CHECK",
+) -> None:
+    if not status:
+        return
+    decision = InspectionDecision(status)
+    adapter.send_result(
+        InspectionResultSignal(
+            request_id=request_id,
+            status=decision,
+            part_id=part_id,
+            defect_code=0 if decision == InspectionDecision.OK else defect_code,
+            defect_type="LINE_CHECK" if decision != InspectionDecision.OK else "",
+            confidence=1.0 if decision != InspectionDecision.OK else 0.0,
+            reason="manual_line_check",
+        )
+    )
+
+
+def _connected_message(test_result: str) -> str:
+    if test_result:
+        return f"Line signal adapter connected and sent test result {test_result}"
+    return "Line signal adapter connected"
+
+
+def _trigger_message(test_result: str) -> str:
+    if test_result:
+        return f"Received capture request and sent test result {test_result}"
+    return "Received capture request"
+
+
 def _format_result(result: LineCheckResult) -> str:
     fields = [
         f"[{result.status}] {result.message}",
@@ -153,6 +209,9 @@ def _format_result(result: LineCheckResult) -> str:
         fields.append(f"request_id={result.request_id}")
         fields.append(f"part_id={result.part_id}")
         fields.append(f"seat_model_id={result.seat_model_id}")
+    if result.test_result_sent:
+        fields.append(f"test_result_sent={result.test_result_sent}")
+        fields.append(f"defect_code={result.defect_code}")
     fields.append(f"elapsed_ms={result.elapsed_ms}")
     return "Line signal check: " + " ".join(fields)
 
