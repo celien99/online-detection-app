@@ -23,6 +23,13 @@ from .sdk.MvCameraControl_class import MvCamera
 from .sdk.MvCameraControl_header import (
     MV_CC_DEVICE_INFO,
     MV_CC_DEVICE_INFO_LIST,
+    MV_TRIGGER_MODE_OFF,
+    MV_TRIGGER_MODE_ON,
+    MV_TRIGGER_SOURCE_LINE0,
+    MV_TRIGGER_SOURCE_LINE1,
+    MV_TRIGGER_SOURCE_LINE2,
+    MV_TRIGGER_SOURCE_LINE3,
+    MV_TRIGGER_SOURCE_SOFTWARE,
     MV_CC_PIXEL_CONVERT_PARAM,
     MV_FRAME_OUT_INFO_EX,
     MVCC_FLOATVALUE,
@@ -49,7 +56,19 @@ GAIN_AUTO_MODE_MAP = {
     "once": 1,
     "continuous": 2,
 }
-TRIGGER_SOURCE_SOFTWARE = 7
+TRIGGER_SOURCE_MAP = {
+    "line0": MV_TRIGGER_SOURCE_LINE0,
+    "line1": MV_TRIGGER_SOURCE_LINE1,
+    "line2": MV_TRIGGER_SOURCE_LINE2,
+    "line3": MV_TRIGGER_SOURCE_LINE3,
+    "software": MV_TRIGGER_SOURCE_SOFTWARE,
+}
+TRIGGER_ACTIVATION_MAP = {
+    "rising_edge": 0,
+    "falling_edge": 1,
+    "level_high": 2,
+    "level_low": 3,
+}
 _ERROR_NAME_BY_CODE = {
     value: name
     for name, value in vars(error_constants).items()
@@ -153,11 +172,15 @@ class HikCamera:
         self,
         locator: CameraLocator | None = None,
         trigger_mode: str = "continuous",
+        trigger_source: str = "software",
+        trigger_activation: str = "rising_edge",
         pixel_format: str = "bgr8",
         property_config: CameraPropertyConfig | None = None,
     ) -> None:
         self.locator = locator or CameraLocator()
         self.trigger_mode = trigger_mode
+        self.trigger_source = trigger_source
+        self.trigger_activation = trigger_activation
         self.pixel_format = pixel_format
         self.property_config = property_config or CameraPropertyConfig()
         self.cam = MvCamera()
@@ -251,7 +274,7 @@ class HikCamera:
                 if int(packet_size) > 0:
                     self.cam.MV_CC_SetIntValue("GevSCPSPacketSize", int(packet_size))
 
-            self.set_trigger_mode(self.trigger_mode == "software")
+            self.apply_trigger_config()
             self._try_set_pixel_format(self.pixel_format)
             self.apply_property_config()
 
@@ -291,19 +314,41 @@ class HikCamera:
             raise MvsCameraError(f"StopGrabbing failed: {parse_error(ret)}")
         self.grabbing = False
 
-    def set_trigger_mode(self, enable: bool) -> None:
-        """设置触发模式。
+    def apply_trigger_config(self) -> None:
+        """Apply continuous, software-trigger, or hardware-trigger acquisition mode."""
+        if self.trigger_mode == "continuous":
+            ret = self.cam.MV_CC_SetEnumValue("TriggerMode", MV_TRIGGER_MODE_OFF)
+            if ret != 0:
+                raise MvsCameraError(f"Set TriggerMode failed: {parse_error(ret)}")
+            return
+        if self.trigger_mode == "software":
+            self.set_trigger_mode(True, source="software", activation=self.trigger_activation)
+            return
+        if self.trigger_mode == "hardware":
+            self.set_trigger_mode(True, source=self.trigger_source, activation=self.trigger_activation)
+            return
+        raise MvsCameraError("Unsupported trigger mode: " + self.trigger_mode)
 
-        - `False`: 连续采集
-        - `True`: 软件触发，并把触发源切到 `TriggerSoftware`
-        """
-        ret = self.cam.MV_CC_SetEnumValue("TriggerMode", 1 if enable else 0)
+    def set_trigger_mode(self, enable: bool, *, source: str = "software", activation: str = "rising_edge") -> None:
+        """设置触发模式。"""
+        ret = self.cam.MV_CC_SetEnumValue("TriggerMode", MV_TRIGGER_MODE_ON if enable else MV_TRIGGER_MODE_OFF)
         if ret != 0:
             raise MvsCameraError(f"Set TriggerMode failed: {parse_error(ret)}")
         if enable:
-            ret = self.cam.MV_CC_SetEnumValue("TriggerSource", TRIGGER_SOURCE_SOFTWARE)
+            normalized_source = source.strip().lower()
+            source_value = TRIGGER_SOURCE_MAP.get(normalized_source)
+            if source_value is None:
+                options = ", ".join(sorted(TRIGGER_SOURCE_MAP))
+                raise MvsCameraError(f"Unsupported TriggerSource '{source}', expected one of: {options}")
+            ret = self.cam.MV_CC_SetEnumValue("TriggerSource", source_value)
             if ret != 0:
                 raise MvsCameraError(f"Set TriggerSource failed: {parse_error(ret)}")
+            normalized_activation = activation.strip().lower()
+            activation_value = TRIGGER_ACTIVATION_MAP.get(normalized_activation)
+            if activation_value is not None:
+                ret = self.cam.MV_CC_SetEnumValue("TriggerActivation", activation_value)
+                if ret != 0:
+                    raise MvsCameraError(f"Set TriggerActivation failed: {parse_error(ret)}")
 
     def trigger_once(self) -> None:
         """软件触发一次采图。"""

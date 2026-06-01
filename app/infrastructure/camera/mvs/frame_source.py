@@ -26,6 +26,8 @@ class MvsCameraSourceConfig:
     - mac_address: MAC 地址
     - grab_timeout_ms: 抓取超时时间（毫秒）
     - trigger_mode: 触发模式
+    - trigger_source: 硬触发输入源
+    - trigger_activation: 硬触发边沿/电平
     - pixel_format: 像素格式
     - exposure_auto: 曝光自动模式
     - exposure_time_us: 曝光时间（微秒）
@@ -48,6 +50,8 @@ class MvsCameraSourceConfig:
     mac_address: str | None = None
     grab_timeout_ms: int = DEFAULT_GRAB_TIMEOUT_MS
     trigger_mode: str = "continuous"
+    trigger_source: str = "software"
+    trigger_activation: str = "rising_edge"
     pixel_format: str = "bgr8"
     exposure_auto: str | None = None
     exposure_time_us: float | None = None
@@ -112,6 +116,7 @@ def parse_mvs_source(source: str) -> MvsCameraSourceConfig:
     - `mvs://ip/192.168.1.10`
     - `mvs://mac/AA:BB:CC:DD:EE:FF`
     - `mvs://0?timeout_ms=2000&trigger=software&pixel_format=bgr8`
+    - `mvs://0?trigger=hardware&trigger_source=Line0&trigger_activation=rising_edge`
     - `mvs://sn/ABC123?exposure_auto=off&exposure_time=6000&gain=8`
     """
     if not is_mvs_source(source):
@@ -124,6 +129,8 @@ def parse_mvs_source(source: str) -> MvsCameraSourceConfig:
     config = MvsCameraSourceConfig(
         grab_timeout_ms=int(query.get("timeout_ms", [DEFAULT_GRAB_TIMEOUT_MS])[0]),
         trigger_mode=query.get("trigger", ["continuous"])[0].lower(),
+        trigger_source=query.get("trigger_source", ["software"])[0].lower(),
+        trigger_activation=query.get("trigger_activation", ["rising_edge"])[0].lower(),
         pixel_format=query.get("pixel_format", ["bgr8"])[0].lower(),
         exposure_auto=_first_query_value(query, "exposure_auto"),
         exposure_time_us=_first_query_float(query, "exposure_time_us", "exposure_time"),
@@ -164,6 +171,8 @@ class MvsCameraCapture:
         self._camera = HikCamera(
             locator=config.to_locator(),
             trigger_mode=config.trigger_mode,
+            trigger_source=config.trigger_source,
+            trigger_activation=config.trigger_activation,
             pixel_format=config.pixel_format,
             property_config=config.to_property_config(),
         )
