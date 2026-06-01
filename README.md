@@ -133,7 +133,7 @@ uv run python -m app.main
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 ```
 
-输出目录为 `dist\OnlineDetectionApp`。部署到测试电脑后：
+输出目录为 `dist\OnlineDetectionApp`，同时生成 `dist\OnlineDetectionApp-<version>-<commit>.zip`。部署到测试电脑后：
 
 1. 编辑 `dist\OnlineDetectionApp\config.json`，填写相机序列号、PLC IP/端口/点表、模型和标定路径。
 2. 将模型放入 `models\`、`deployed_models\`、`deployed_rules\`、`calibration\` 等目录。
@@ -143,10 +143,16 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 6. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1` 确认海康相机 SDK、相机选择和抓图链路。
 7. 运行 `OnlineDetectionApp.exe`。
 
-构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，并检查 GUI/诊断/相机检查/产线信号检查 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
+构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，写入 `BUILD_INFO.txt` 和 `MANIFEST.json`，压缩成 zip，并检查 GUI/诊断/相机检查/产线信号检查 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1 -SkipTests
+```
+
+如需单独校验已有部署目录：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify_deployment.ps1 -DistRoot dist\OnlineDetectionApp
 ```
 
 ## 架构设计

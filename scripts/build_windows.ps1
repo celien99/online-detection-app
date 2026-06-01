@@ -2,6 +2,7 @@ param(
     [string]$ConfigTemplate = "config.production.example.json",
     [switch]$SkipTests,
     [switch]$SkipDiagnostics,
+    [switch]$SkipArchive,
     [switch]$Clean
 )
 
@@ -62,6 +63,18 @@ foreach ($relativePath in $RequiredPaths) {
     }
 }
 
+$Version = (uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])").Trim()
+$Commit = (git rev-parse --short HEAD).Trim()
+$BuiltAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$BuildInfo = @"
+name=OnlineDetectionApp
+version=$Version
+commit=$Commit
+built_at_utc=$BuiltAt
+config_template=$ConfigTemplate
+"@
+$BuildInfo | Set-Content -Encoding UTF8 (Join-Path $DistRoot "BUILD_INFO.txt")
+
 $Readme = @"
 OnlineDetectionApp deployment
 
@@ -89,5 +102,33 @@ Main GUI:
    OnlineDetectionApp.exe
 "@
 $Readme | Set-Content -Encoding UTF8 (Join-Path $DistRoot "DEPLOYMENT.txt")
+
+$ManifestItems = foreach ($relativePath in $RequiredPaths + @("BUILD_INFO.txt", "DEPLOYMENT.txt")) {
+    $fullPath = Join-Path $DistRoot $relativePath
+    [pscustomobject]@{
+        path = $relativePath
+        exists = Test-Path $fullPath
+        type = if (Test-Path $fullPath -PathType Container) { "directory" } else { "file" }
+        size = if (Test-Path $fullPath -PathType Leaf) { (Get-Item $fullPath).Length } else { 0 }
+    }
+}
+[pscustomobject]@{
+    name = "OnlineDetectionApp"
+    version = $Version
+    commit = $Commit
+    built_at_utc = $BuiltAt
+    items = $ManifestItems
+} | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $DistRoot "MANIFEST.json")
+
+& (Join-Path $PSScriptRoot "verify_deployment.ps1") -DistRoot $DistRoot
+
+if (-not $SkipArchive) {
+    $ArchivePath = Join-Path (Join-Path $RepoRoot "dist") "OnlineDetectionApp-$Version-$Commit.zip"
+    if (Test-Path $ArchivePath) {
+        Remove-Item -Force $ArchivePath
+    }
+    Compress-Archive -Path (Join-Path $DistRoot "*") -DestinationPath $ArchivePath -Force
+    Write-Host "Archive complete: $ArchivePath"
+}
 
 Write-Host "Build complete: $DistRoot"
