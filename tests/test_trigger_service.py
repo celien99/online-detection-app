@@ -77,6 +77,11 @@ class FakeInspectionService:
         return FakeResponse()
 
 
+class EmptyCamera(FakeCamera):
+    def grab_frame(self, timeout_ms: int = 1000):
+        return None
+
+
 def test_trigger_service_runs_one_inspection_for_manual_request() -> None:
     camera_manager = CameraManager()
     camera = FakeCamera()
@@ -109,6 +114,43 @@ def test_trigger_service_runs_one_inspection_for_manual_request() -> None:
     assert adapter.last_result is not None
     assert adapter.last_result.status == InspectionDecision.OK
     assert adapter.last_result.part_id == "P1"
+
+
+def test_trigger_service_sends_one_request_fault_on_capture_timeout() -> None:
+    camera_manager = CameraManager()
+    camera = EmptyCamera()
+    camera_manager.register(camera)
+    camera_manager.connect_all()
+    adapter = VirtualLineSignalAdapter()
+    adapter.connect()
+    inspection = FakeInspectionService()
+    handled = []
+
+    svc = TriggerService(
+        adapter=adapter,
+        camera_manager=camera_manager,
+        inspection_service=inspection,
+        handle_response=lambda response, frames: handled.append((response, frames)),
+        poll_interval_s=0.01,
+        capture_timeout_s=0.03,
+    )
+    svc.start()
+    try:
+        assert svc.manual_trigger(part_id="P_TIMEOUT") is True
+        deadline = time.time() + 1.0
+        while time.time() < deadline and adapter.last_fault is None:
+            time.sleep(0.01)
+    finally:
+        svc.stop()
+        camera_manager.disconnect_all()
+
+    assert inspection.calls == 0
+    assert handled == []
+    assert adapter.last_result is None
+    assert adapter.last_fault is not None
+    assert adapter.last_fault[0] == "inspection_failed"
+    assert adapter.last_fault[1] == "capture_timeout_no_frames"
+    assert len(adapter._faults) == 1
 
 
 def test_labview_tcp_adapter_parses_request_and_sends_result() -> None:

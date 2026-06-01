@@ -18,6 +18,10 @@ from app.infrastructure.plc.interface import LineStatus
 from app.services.inspection_service import InspectionService
 
 
+class TriggerRequestHandledError(RuntimeError):
+    """Raised after a request-level fault has already been sent to the line adapter."""
+
+
 @dataclass(slots=True)
 class TriggerState:
     mode: str = "continuous"
@@ -121,7 +125,8 @@ class TriggerService:
                     continue
                 self._run_request(request)
             except Exception as exc:
-                self._adapter.send_fault(None, "trigger_loop_failed", str(exc))
+                if not isinstance(exc, TriggerRequestHandledError):
+                    self._adapter.send_fault(None, "trigger_loop_failed", str(exc))
                 self._set_state(last_error=str(exc), busy=False, waiting=True)
                 time.sleep(0.2)
 
@@ -154,7 +159,7 @@ class TriggerService:
         except Exception as exc:
             self._adapter.send_fault(request, "inspection_failed", str(exc))
             self._set_state(last_error=str(exc), last_result="FAULT")
-            raise
+            raise TriggerRequestHandledError(str(exc)) from exc
         finally:
             self._adapter.send_busy(request, False)
             self._set_state(busy=False, waiting=True)
