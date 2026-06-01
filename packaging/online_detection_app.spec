@@ -27,7 +27,20 @@ hiddenimports = [
     "pymodbus.client",
     "cv2",
     "numpy",
+    "torch",
+    "torchvision",
+    "ultralytics",
+    "ultralytics.engine.results",
+    "ultralytics.utils.ops",
+    "anomalib.models.image.efficient_ad.torch_model",
     "seat_defect_core",
+    "seat_defect_core.api",
+    "seat_defect_core.service.core",
+    "seat_defect_core.yolo.detection",
+    "seat_defect_core.efficientad.engine",
+    "seat_defect_core.classifier.engine",
+    "seat_defect_core.calibration.registry",
+    "seat_defect_core.rule_engine",
 ]
 
 gui = Analysis(

@@ -15,3 +15,18 @@ def test_deployment_verifier_requires_production_template() -> None:
     assert '"config.production.example.json"' in build_script
     assert 'if not exist "config.production.example.json"' in build_script
     assert "OnlineDetectionConfigWizard.exe --template config.production.example.json" in build_script
+
+
+def test_pyinstaller_spec_includes_runtime_hidden_imports() -> None:
+    spec = (ROOT / "packaging" / "online_detection_app.spec").read_text(encoding="utf-8")
+
+    for module_name in [
+        "torch",
+        "ultralytics",
+        "anomalib.models.image.efficient_ad.torch_model",
+        "seat_defect_core.api",
+        "seat_defect_core.yolo.detection",
+        "seat_defect_core.efficientad.engine",
+        "seat_defect_core.classifier.engine",
+    ]:
+        assert f'"{module_name}"' in spec
