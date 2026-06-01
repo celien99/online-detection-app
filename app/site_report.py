@@ -15,6 +15,7 @@ from app import mvs_list
 from app.camera_check import check_camera
 from app.infrastructure.config_store import ConfigStore
 from app.line_check import check_line_signal
+from app.model_check import check_models
 from app.runtime_paths import chdir_to_config_dir, resolve_config_path
 from app.services.diagnostics import ProductionDiagnostics
 
@@ -29,6 +30,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--camera-frames", type=int, default=1, help="Number of frames to grab per camera")
     parser.add_argument("--camera-timeout-ms", type=int, default=2000, help="Per-frame grab timeout")
     parser.add_argument("--skip-camera-check", action="store_true", help="Do not connect to configured cameras")
+    parser.add_argument("--skip-model-check", action="store_true", help="Do not preload configured ML models")
+    parser.add_argument("--seat-model-id", default="", help="Optional seat model ID to warm up in the model check")
     parser.add_argument(
         "--camera-connect-only",
         action="store_true",
@@ -65,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
             camera_frames=max(1, args.camera_frames),
             camera_timeout_ms=max(1, args.camera_timeout_ms),
             skip_camera_check=args.skip_camera_check,
+            skip_model_check=args.skip_model_check,
+            seat_model_id=args.seat_model_id.strip() or None,
             camera_connect_only=args.camera_connect_only,
             skip_mvs_list=args.skip_mvs_list,
             wait_trigger=args.wait_trigger,
@@ -94,6 +99,8 @@ def collect_site_report(
     camera_frames: int = 1,
     camera_timeout_ms: int = 2000,
     skip_camera_check: bool = False,
+    skip_model_check: bool = False,
+    seat_model_id: str | None = None,
     camera_connect_only: bool = False,
     skip_mvs_list: bool = False,
     wait_trigger: bool = False,
@@ -103,6 +110,11 @@ def collect_site_report(
     defect_code: int = 9001,
 ) -> dict[str, Any]:
     diagnostics = ProductionDiagnostics(config, config_path).run().to_dict()
+    model_check = _collect_model_check(
+        config_path=config_path,
+        skip=skip_model_check,
+        seat_model_id=seat_model_id,
+    )
     line_signal = asdict(
         check_line_signal(
             line_config=config.get("line_signal", default={}),
@@ -123,7 +135,7 @@ def collect_site_report(
         skip=skip_camera_check,
         connect_only=camera_connect_only,
     )
-    statuses = [diagnostics["status"], line_signal["status"], mvs_devices["status"]]
+    statuses = [diagnostics["status"], model_check["status"], line_signal["status"], mvs_devices["status"]]
     statuses.extend(item["status"] for item in camera_items["items"])
     return {
         "status": _overall_status(statuses),
@@ -135,10 +147,27 @@ def collect_site_report(
             "cwd": str(Path.cwd()),
         },
         "diagnostics": diagnostics,
+        "model_check": model_check,
         "line_signal": line_signal,
         "mvs_devices": mvs_devices,
         "camera_check": camera_items,
     }
+
+
+def _collect_model_check(*, config_path: Path, skip: bool, seat_model_id: str | None) -> dict[str, Any]:
+    if skip:
+        return {
+            "status": "SKIP",
+            "message": "Model runtime check skipped",
+            "seat_model_id": seat_model_id or "",
+            "runtime_modules": [],
+        }
+    return asdict(
+        check_models(
+            config_path=config_path,
+            seat_model_id=seat_model_id,
+        )
+    )
 
 
 def _collect_mvs_devices(*, skip: bool) -> dict[str, Any]:
@@ -214,6 +243,7 @@ def _format_summary(report: dict[str, Any], output_path: Path) -> str:
         f"Site report: {report['status']}",
         f"Report: {output_path}",
         f"Diagnostics: {report['diagnostics']['status']}",
+        f"Model check: {report['model_check']['status']} ({report['model_check']['message']})",
         f"Line signal: {report['line_signal']['status']} ({report['line_signal']['message']})",
         f"MVS devices: {report['mvs_devices']['status']} ({report['mvs_devices']['message']})",
         f"Cameras: {report['camera_check']['status']} ({ok_cameras}/{len(camera_items)} OK)",

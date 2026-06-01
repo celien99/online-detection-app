@@ -229,7 +229,7 @@ OnlineDetectionApp deployment
 10. Run 05_list_mvs_cameras.bat if camera serial numbers need to be confirmed.
 11. Run 06_check_camera_connections.bat.
 12. Run 07_grab_camera_samples.bat while providing camera trigger pulses if cameras are hardware-triggered.
-13. Run 08_collect_site_report.bat and send site_report.json plus camera_samples\ if troubleshooting is needed.
+13. Run 08_collect_site_report.bat and send site_report.json plus camera_samples\ if troubleshooting is needed. The report includes diagnostics, model runtime check, line signal, MVS listing, and camera status.
 14. Run 09_start_app.bat.
 
 Run diagnostics before production:
@@ -254,6 +254,7 @@ Check PLC / line signal:
 
 Collect site report:
    OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples --camera-connect-only
+   OnlineDetectionSiteReport.exe --config config.json --output site_report.json --skip-model-check --camera-connect-only
 
 Main GUI:
    OnlineDetectionApp.exe

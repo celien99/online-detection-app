@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from app import mvs_list
+from app.model_check import ModelCheckResult
 from app.infrastructure.line_signal import InspectionDecision
 from app.infrastructure.camera.mvs.camera_controller import MvsDeviceInfo
 from app.site_report import main as site_report_main
@@ -15,6 +16,19 @@ from app.site_report import main as site_report_main
 
 def _write_config(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def _ok_model_check(config_path: Path, seat_model_id: str | None = None) -> ModelCheckResult:
+    return ModelCheckResult(
+        status="OK",
+        message="Model runtime warmup succeeded",
+        config_path=str(config_path),
+        camera_count=1,
+        seat_model_id=seat_model_id or "",
+        warmup_skipped=False,
+        elapsed_ms=12,
+        runtime_modules=[],
+    )
 
 
 def test_site_report_collects_checks_and_restores_cwd(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -54,6 +68,7 @@ def test_site_report_collects_checks_and_restores_cwd(tmp_path: Path, monkeypatc
         lambda: [MvsDeviceInfo(index=0, tlayer_type=1, serial_number="ABC123", model_name="MV-TEST")],
     )
     monkeypatch.setattr(mvs_list, "describe_mvs_sdk_candidates", lambda path: [str(path)])
+    monkeypatch.setattr("app.site_report.check_models", _ok_model_check)
 
     exit_code = site_report_main(
         [
@@ -75,6 +90,7 @@ def test_site_report_collects_checks_and_restores_cwd(tmp_path: Path, monkeypatc
     assert payload == json.loads(report_path.read_text(encoding="utf-8"))
     assert payload["status"] == "WARN"
     assert payload["diagnostics"]["status"] == "WARN"
+    assert payload["model_check"]["status"] == "OK"
     assert payload["line_signal"]["status"] == "OK"
     assert payload["mvs_devices"]["devices"][0]["serial_number"] == "ABC123"
     camera_item = payload["camera_check"]["items"][0]
@@ -105,6 +121,7 @@ def test_site_report_returns_failure_when_camera_check_fails(tmp_path: Path, mon
     )
     monkeypatch.setattr(mvs_list, "list_mvs_devices", lambda: [])
     monkeypatch.setattr(mvs_list, "describe_mvs_sdk_candidates", lambda path: [str(path)])
+    monkeypatch.setattr("app.site_report.check_models", _ok_model_check)
 
     exit_code = site_report_main(["--config", str(config_path), "--output", "site_report.json", "--json"])
 
@@ -164,6 +181,7 @@ def test_site_report_can_send_line_test_result(tmp_path: Path, monkeypatch, caps
     monkeypatch.setattr("app.line_check.create_line_signal", lambda line_config, plc_config: CapturingVirtualAdapter())
     monkeypatch.setattr(mvs_list, "list_mvs_devices", lambda: [])
     monkeypatch.setattr(mvs_list, "describe_mvs_sdk_candidates", lambda path: [str(path)])
+    monkeypatch.setattr("app.site_report.check_models", _ok_model_check)
 
     exit_code = site_report_main(
         [
@@ -215,6 +233,7 @@ def test_site_report_camera_connect_only_skips_sample_grab(tmp_path: Path, monke
     )
     monkeypatch.setattr(mvs_list, "list_mvs_devices", lambda: [])
     monkeypatch.setattr(mvs_list, "describe_mvs_sdk_candidates", lambda path: [str(path)])
+    monkeypatch.setattr("app.site_report.check_models", _ok_model_check)
 
     exit_code = site_report_main(
         [
@@ -236,3 +255,96 @@ def test_site_report_camera_connect_only_skips_sample_grab(tmp_path: Path, monke
     assert camera_item["frames_grabbed"] == 0
     assert camera_item["sample_path"] == ""
     assert not (site_dir / "camera_samples").exists()
+
+
+def test_site_report_can_skip_model_check(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "model.pt").write_bytes(b"model")
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "continuous"},
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "file_watcher",
+                    "enabled": True,
+                    "watch_dir": "./input/CAM_A",
+                    "efficientad_model_path": "./model.pt",
+                }
+            ],
+            "line_signal": {"enabled": True, "type": "virtual"},
+            "storage": {"log_dir": ".", "screenshot_dir": "."},
+        },
+    )
+    calls = []
+    monkeypatch.setattr(mvs_list, "list_mvs_devices", lambda: [])
+    monkeypatch.setattr(mvs_list, "describe_mvs_sdk_candidates", lambda path: [str(path)])
+    monkeypatch.setattr("app.site_report.check_models", lambda **kwargs: calls.append(kwargs))
+
+    exit_code = site_report_main(
+        [
+            "--config",
+            str(config_path),
+            "--output",
+            "site_report.json",
+            "--skip-model-check",
+            "--skip-camera-check",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert calls == []
+    assert payload["model_check"]["status"] == "SKIP"
+    assert payload["model_check"]["message"] == "Model runtime check skipped"
+
+
+def test_site_report_passes_seat_model_id_to_model_check(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "model.pt").write_bytes(b"model")
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "continuous"},
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "file_watcher",
+                    "enabled": True,
+                    "watch_dir": "./input/CAM_A",
+                    "efficientad_model_path": "./model.pt",
+                }
+            ],
+            "line_signal": {"enabled": True, "type": "virtual"},
+            "storage": {"log_dir": ".", "screenshot_dir": "."},
+        },
+    )
+    seen = []
+
+    def fake_model_check(*, config_path: Path, seat_model_id: str | None = None, skip_warmup: bool = False):
+        seen.append((config_path.name, seat_model_id, skip_warmup))
+        return _ok_model_check(config_path, seat_model_id)
+
+    monkeypatch.setattr(mvs_list, "list_mvs_devices", lambda: [])
+    monkeypatch.setattr(mvs_list, "describe_mvs_sdk_candidates", lambda path: [str(path)])
+    monkeypatch.setattr("app.site_report.check_models", fake_model_check)
+
+    exit_code = site_report_main(
+        [
+            "--config",
+            str(config_path),
+            "--output",
+            "site_report.json",
+            "--skip-camera-check",
+            "--seat-model-id",
+            "MODEL_A",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert seen == [("config.json", "MODEL_A", False)]
+    assert payload["model_check"]["seat_model_id"] == "MODEL_A"

@@ -145,7 +145,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 8. 如需确认相机序列号，运行 `OnlineDetectionMvsList.exe` 查看海康 SDK 可见设备和建议的 `mvs://sn/...` 配置。
 9. 先运行 `OnlineDetectionCameraCheck.exe --config config.json --connect-only` 确认海康相机 SDK、相机选择和参数下发；硬触发相机无 PLC 脉冲时不会强制要求取到图。
 10. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples`，配合 PLC 触发脉冲确认抓图链路并保存现场样图。
-11. 现场排障或回传信息时，运行 `OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples --camera-connect-only`，它会聚合配置诊断、PLC/产线信号、MVS 枚举和相机连接结果。
+11. 现场排障或回传信息时，运行 `OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples --camera-connect-only`，它会聚合配置诊断、模型自检、PLC/产线信号、MVS 枚举和相机连接结果；如需跳过模型预热可加 `--skip-model-check`。
 12. 运行 `OnlineDetectionApp.exe`。
 
 如果测试电脑第一次配置，可用向导从生产模板生成配置：
@@ -158,7 +158,7 @@ OnlineDetectionConfigWizard.exe --template config.production.example.json --outp
 
 部署目录也会生成可双击的批处理脚本：`00_create_production_config.bat`、`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_models.bat`、`03_check_line_signal.bat`、`04_send_plc_ng_test.bat`、`05_list_mvs_cameras.bat`、`06_check_camera_connections.bat`、`07_grab_camera_samples.bat`、`08_collect_site_report.bat`、`09_start_app.bat`。
 
-GUI 启动、后台线程异常和未捕获异常会写入 `logs\runtime.log`。现场排障时优先回传 `site_report.json`、`camera_samples\` 和 `logs\runtime.log`。
+GUI 启动、后台线程异常和未捕获异常会写入 `logs\runtime.log`。现场排障时优先回传 `site_report.json`、`camera_samples\` 和 `logs\runtime.log`；`site_report.json` 中的 `model_check` 字段可直接判断测试电脑上的模型运行时和权重预热是否通过。
 
 构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，写入 `BUILD_INFO.txt` 和 `MANIFEST.json`，压缩成 zip，并检查 GUI/诊断/配置向导/模型检查/相机检查/产线信号检查/MVS 枚举/现场报告 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
 
