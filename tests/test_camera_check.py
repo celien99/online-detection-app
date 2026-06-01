@@ -75,3 +75,43 @@ def test_camera_check_returns_failure_for_missing_camera(tmp_path: Path, capsys)
 
     assert exit_code == 1
     assert payload["items"][0]["status"] == "FAIL"
+
+
+def test_camera_check_connect_only_skips_frame_requirement(tmp_path: Path, monkeypatch, capsys) -> None:
+    site_dir = tmp_path / "site"
+    input_dir = site_dir / "input" / "CAM_A"
+    input_dir.mkdir(parents=True)
+    config_path = site_dir / "config.json"
+    _write_config(
+        config_path,
+        {
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "file_watcher",
+                    "enabled": True,
+                    "watch_dir": "./input/CAM_A",
+                    "pattern": "*.jpg",
+                }
+            ]
+        },
+    )
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = camera_check_main([
+        "--config",
+        str(config_path),
+        "--connect-only",
+        "--save-dir",
+        "camera_samples",
+        "--json",
+    ])
+    payload = json.loads(capsys.readouterr().out)
+    item = payload["items"][0]
+
+    assert exit_code == 0
+    assert Path.cwd() == tmp_path
+    assert item["status"] == "OK"
+    assert item["frames_grabbed"] == 0
+    assert item["sample_path"] == ""
+    assert not (site_dir / "camera_samples").exists()

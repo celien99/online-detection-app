@@ -31,9 +31,10 @@ $RequiredPaths = @(
     "02_check_line_signal.bat",
     "03_send_plc_ng_test.bat",
     "04_list_mvs_cameras.bat",
-    "05_check_cameras.bat",
-    "06_collect_site_report.bat",
-    "07_start_app.bat"
+    "05_check_camera_connections.bat",
+    "06_grab_camera_samples.bat",
+    "07_collect_site_report.bat",
+    "08_start_app.bat"
 )
 
 foreach ($relativePath in $RequiredPaths) {

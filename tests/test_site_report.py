@@ -186,3 +186,53 @@ def test_site_report_can_send_line_test_result(tmp_path: Path, monkeypatch, caps
     assert payload["line_signal"]["defect_code"] == 88
     assert sent_results[0].status == InspectionDecision.NG
     assert sent_results[0].defect_code == 88
+
+
+def test_site_report_camera_connect_only_skips_sample_grab(tmp_path: Path, monkeypatch, capsys) -> None:
+    site_dir = tmp_path / "site"
+    input_dir = site_dir / "input" / "CAM_A"
+    input_dir.mkdir(parents=True)
+    model_path = site_dir / "model.pt"
+    model_path.write_bytes(b"model")
+    config_path = site_dir / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "continuous"},
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "file_watcher",
+                    "enabled": True,
+                    "watch_dir": "./input/CAM_A",
+                    "pattern": "*.jpg",
+                    "efficientad_model_path": "./model.pt",
+                }
+            ],
+            "line_signal": {"enabled": True, "type": "virtual"},
+            "storage": {"log_dir": ".", "screenshot_dir": "."},
+        },
+    )
+    monkeypatch.setattr(mvs_list, "list_mvs_devices", lambda: [])
+    monkeypatch.setattr(mvs_list, "describe_mvs_sdk_candidates", lambda path: [str(path)])
+
+    exit_code = site_report_main(
+        [
+            "--config",
+            str(config_path),
+            "--output",
+            "site_report.json",
+            "--camera-samples-dir",
+            "camera_samples",
+            "--camera-connect-only",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    camera_item = payload["camera_check"]["items"][0]
+
+    assert exit_code == 0
+    assert camera_item["status"] == "OK"
+    assert camera_item["frames_grabbed"] == 0
+    assert camera_item["sample_path"] == ""
+    assert not (site_dir / "camera_samples").exists()

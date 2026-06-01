@@ -142,9 +142,10 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 5. 再运行 `OnlineDetectionLineCheck.exe --config config.json` 确认 PLC/产线信号连接；如需等待一次到位触发，运行 `OnlineDetectionLineCheck.exe --config config.json --wait-trigger --timeout-s 10`。
 6. 与 PLC 工程师确认结果点位时，运行 `OnlineDetectionLineCheck.exe --config config.json --send-test-result NG --defect-code 9001`，观察 `ng_coil`、`done_coil` 和 `defect_code_register`。
 7. 如需确认相机序列号，运行 `OnlineDetectionMvsList.exe` 查看海康 SDK 可见设备和建议的 `mvs://sn/...` 配置。
-8. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples` 确认海康相机 SDK、相机选择和抓图链路，并保存现场样图。
-9. 现场排障或回传信息时，运行 `OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples`，它会聚合配置诊断、PLC/产线信号、MVS 枚举和相机抓图结果。
-10. 运行 `OnlineDetectionApp.exe`。
+8. 先运行 `OnlineDetectionCameraCheck.exe --config config.json --connect-only` 确认海康相机 SDK、相机选择和参数下发；硬触发相机无 PLC 脉冲时不会强制要求取到图。
+9. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples`，配合 PLC 触发脉冲确认抓图链路并保存现场样图。
+10. 现场排障或回传信息时，运行 `OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples --camera-connect-only`，它会聚合配置诊断、PLC/产线信号、MVS 枚举和相机连接结果。
+11. 运行 `OnlineDetectionApp.exe`。
 
 如果测试电脑第一次配置，可用向导从生产模板生成配置：
 
@@ -154,7 +155,7 @@ OnlineDetectionConfigWizard.exe --template config.production.example.json --outp
 
 多相机时重复传入 `--camera-sn` 和 `--camera-id`；PLC 点位可用 `--point ok_coil=14 --point ng_coil=15` 覆盖。
 
-部署目录也会生成可双击的批处理脚本：`00_create_production_config.bat`、`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_line_signal.bat`、`03_send_plc_ng_test.bat`、`04_list_mvs_cameras.bat`、`05_check_cameras.bat`、`06_collect_site_report.bat`、`07_start_app.bat`。
+部署目录也会生成可双击的批处理脚本：`00_create_production_config.bat`、`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_line_signal.bat`、`03_send_plc_ng_test.bat`、`04_list_mvs_cameras.bat`、`05_check_camera_connections.bat`、`06_grab_camera_samples.bat`、`07_collect_site_report.bat`、`08_start_app.bat`。
 
 GUI 启动、后台线程异常和未捕获异常会写入 `logs\runtime.log`。现场排障时优先回传 `site_report.json`、`camera_samples\` 和 `logs\runtime.log`。
 

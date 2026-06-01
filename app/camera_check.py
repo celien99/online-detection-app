@@ -42,6 +42,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--frames", type=int, default=1, help="Number of frames to grab per camera")
     parser.add_argument("--timeout-ms", type=int, default=2000, help="Per-frame grab timeout")
     parser.add_argument("--save-dir", default="", help="Directory for saving the last grabbed frame per camera")
+    parser.add_argument(
+        "--connect-only",
+        action="store_true",
+        help="Only connect and read camera status; useful for hardware-triggered cameras without a PLC pulse",
+    )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     args = parser.parse_args(argv)
 
@@ -66,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
                     frames=max(1, args.frames),
                     timeout_ms=max(1, args.timeout_ms),
                     save_dir=Path(args.save_dir) if args.save_dir else None,
+                    connect_only=args.connect_only,
                 )
                 for cam in camera_configs
             ]
@@ -85,6 +91,7 @@ def check_camera(
     frames: int = 1,
     timeout_ms: int = 2000,
     save_dir: Path | None = None,
+    connect_only: bool = False,
 ) -> CameraCheckItem:
     camera_id = str(camera_config.get("camera_id", "<unknown>"))
     started = time.time()
@@ -94,6 +101,18 @@ def check_camera(
     try:
         camera = create_camera(camera_config)
         camera.connect()
+        if connect_only:
+            status = camera.get_status()
+            return CameraCheckItem(
+                camera_id=camera_id,
+                status="OK" if status.connected else "FAIL",
+                message="Camera connected; frame grab skipped" if status.connected else "Camera did not report connected",
+                width=status.width,
+                height=status.height,
+                fps=status.fps,
+                frames_grabbed=0,
+                elapsed_ms=int((time.time() - started) * 1000),
+            )
         for _ in range(frames):
             frame = camera.grab_frame(timeout_ms=timeout_ms)
             if frame is not None:

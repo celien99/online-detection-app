@@ -29,6 +29,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--camera-frames", type=int, default=1, help="Number of frames to grab per camera")
     parser.add_argument("--camera-timeout-ms", type=int, default=2000, help="Per-frame grab timeout")
     parser.add_argument("--skip-camera-check", action="store_true", help="Do not connect to configured cameras")
+    parser.add_argument(
+        "--camera-connect-only",
+        action="store_true",
+        help="Only connect cameras; do not wait for frames",
+    )
     parser.add_argument("--skip-mvs-list", action="store_true", help="Do not enumerate Hikrobot MVS cameras")
     parser.add_argument("--wait-trigger", action="store_true", help="Wait for one line capture request")
     parser.add_argument("--line-timeout-s", type=float, default=5.0, help="Timeout when waiting for a line trigger")
@@ -60,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
             camera_frames=max(1, args.camera_frames),
             camera_timeout_ms=max(1, args.camera_timeout_ms),
             skip_camera_check=args.skip_camera_check,
+            camera_connect_only=args.camera_connect_only,
             skip_mvs_list=args.skip_mvs_list,
             wait_trigger=args.wait_trigger,
             line_timeout_s=max(0.0, args.line_timeout_s),
@@ -88,6 +94,7 @@ def collect_site_report(
     camera_frames: int = 1,
     camera_timeout_ms: int = 2000,
     skip_camera_check: bool = False,
+    camera_connect_only: bool = False,
     skip_mvs_list: bool = False,
     wait_trigger: bool = False,
     line_timeout_s: float = 5.0,
@@ -114,6 +121,7 @@ def collect_site_report(
         frames=camera_frames,
         timeout_ms=camera_timeout_ms,
         skip=skip_camera_check,
+        connect_only=camera_connect_only,
     )
     statuses = [diagnostics["status"], line_signal["status"], mvs_devices["status"]]
     statuses.extend(item["status"] for item in camera_items["items"])
@@ -156,6 +164,7 @@ def _collect_camera_checks(
     frames: int,
     timeout_ms: int,
     skip: bool,
+    connect_only: bool,
 ) -> dict[str, Any]:
     camera_configs = config.get_camera_configs()
     if skip:
@@ -167,7 +176,15 @@ def _collect_camera_checks(
             "items": [{"camera_id": "<none>", "status": "FAIL", "message": "No enabled cameras in config"}],
         }
     items = [
-        asdict(check_camera(cam, frames=frames, timeout_ms=timeout_ms, save_dir=samples_dir))
+        asdict(
+            check_camera(
+                cam,
+                frames=frames,
+                timeout_ms=timeout_ms,
+                save_dir=samples_dir,
+                connect_only=connect_only,
+            )
+        )
         for cam in camera_configs
     ]
     return {
