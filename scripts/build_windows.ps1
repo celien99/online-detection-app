@@ -49,6 +49,7 @@ $RequiredPaths = @(
     "OnlineDetectionMvsList.exe",
     "OnlineDetectionSiteReport.exe",
     "config.json",
+    "config.production.example.json",
     "app/qml/main.qml",
     "app/resources/styles/theme.qml",
     "app/infrastructure/camera/mvs/MvCameraControl.dll",
@@ -113,6 +114,10 @@ if not exist "OnlineDetectionSiteReport.exe" (
 )
 if not exist "config.json" (
   echo Missing config.json
+  exit /b 1
+)
+if not exist "config.production.example.json" (
+  echo Missing config.production.example.json
   exit /b 1
 )
 if not exist "app\qml\main.qml" (

@@ -13,6 +13,7 @@ $RequiredPaths = @(
     "OnlineDetectionMvsList.exe",
     "OnlineDetectionSiteReport.exe",
     "config.json",
+    "config.production.example.json",
     "app/qml/main.qml",
     "app/resources/styles/theme.qml",
     "app/infrastructure/camera/mvs/MvCameraControl.dll",
