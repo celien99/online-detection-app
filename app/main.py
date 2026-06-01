@@ -20,7 +20,7 @@ from app.infrastructure.camera.manager import CameraManager
 from app.infrastructure.camera.factory import create_camera
 from app.infrastructure.config_store import ConfigStore
 from app.infrastructure.image_provider import CameraImageProvider
-from app.infrastructure.line_signal import LabVIEWTcpLineSignalAdapter, ModbusLineSignalAdapter, VirtualLineSignalAdapter
+from app.infrastructure.line_signal_factory import create_line_signal
 from app.infrastructure.plc.interface import PLCInterface, DefectSignal, Severity
 from app.infrastructure.plc.modbus_adapter import ModbusTCPAdapter
 from app.infrastructure.plc.virtual_plc import VirtualPLC
@@ -54,21 +54,6 @@ def _create_plc(plc_config: Dict[str, Any]) -> PLCInterface:
         defect_coil=plc_config.get("defect_coil", 100),
         stop_coil=plc_config.get("stop_coil", 101),
     )
-
-
-def _create_line_signal(line_config: Dict[str, Any], plc_config: Dict[str, Any]):
-    if not line_config.get("enabled", False):
-        return VirtualLineSignalAdapter()
-    adapter_type = line_config.get("type", "modbus")
-    if adapter_type == "modbus":
-        merged_config = dict(plc_config)
-        merged_config.update(line_config)
-        return ModbusLineSignalAdapter(merged_config)
-    if adapter_type == "labview_tcp":
-        return LabVIEWTcpLineSignalAdapter(line_config)
-    if adapter_type == "virtual":
-        return VirtualLineSignalAdapter()
-    raise ValueError(f"Unsupported line signal adapter type: {adapter_type}")
 
 
 def _should_send_legacy_plc_defect(runtime_mode: str, line_config: Dict[str, Any], plc_config: Dict[str, Any]) -> bool:
@@ -172,7 +157,7 @@ def main(config_path: str | None = None) -> int:
     plc_config = config.get_plc_config()
     line_config = config.get("line_signal", default={})
     plc = _create_plc(plc_config)
-    line_signal = _create_line_signal(line_config, plc_config)
+    line_signal = create_line_signal(line_config, plc_config)
     send_legacy_plc_defect = _should_send_legacy_plc_defect(runtime_mode, line_config, plc_config)
     log_engine = LogEngine(
         db_path=str(Path(config.get_storage_config().get("log_dir", "./logs")) / "inspection.db"),

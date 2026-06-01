@@ -127,16 +127,51 @@ camera_check_exe = EXE(
     entitlements_file=None,
 )
 
+line_check = Analysis(
+    ["app/line_check.py"],
+    pathex=[str(ROOT)],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+line_check_pyz = PYZ(line_check.pure)
+line_check_exe = EXE(
+    line_check_pyz,
+    line_check.scripts,
+    [],
+    exclude_binaries=True,
+    name="OnlineDetectionLineCheck",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
 coll = COLLECT(
     gui_exe,
     diagnostics_exe,
     camera_check_exe,
+    line_check_exe,
     gui.binaries,
     gui.datas,
     diagnostics.binaries,
     diagnostics.datas,
     camera_check.binaries,
     camera_check.datas,
+    line_check.binaries,
+    line_check.datas,
     strip=False,
     upx=True,
     upx_exclude=[],
