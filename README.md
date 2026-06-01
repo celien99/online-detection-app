@@ -140,10 +140,11 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 3. 确认测试电脑已安装 Hikrobot MVS 运行环境，且相机能在 MVS 工具中正常取流。
 4. 先运行 `OnlineDetectionDiagnostics.exe --config config.json` 做配置、模型、系统环境自检。
 5. 再运行 `OnlineDetectionLineCheck.exe --config config.json` 确认 PLC/产线信号连接；如需等待一次到位触发，运行 `OnlineDetectionLineCheck.exe --config config.json --wait-trigger --timeout-s 10`。
-6. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1` 确认海康相机 SDK、相机选择和抓图链路。
-7. 运行 `OnlineDetectionApp.exe`。
+6. 如需确认相机序列号，运行 `OnlineDetectionMvsList.exe` 查看海康 SDK 可见设备和建议的 `mvs://sn/...` 配置。
+7. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1` 确认海康相机 SDK、相机选择和抓图链路。
+8. 运行 `OnlineDetectionApp.exe`。
 
-部署目录也会生成可双击的批处理脚本：`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_line_signal.bat`、`03_check_cameras.bat`、`04_start_app.bat`。
+部署目录也会生成可双击的批处理脚本：`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_line_signal.bat`、`03_list_mvs_cameras.bat`、`04_check_cameras.bat`、`05_start_app.bat`。
 
 GUI 启动、后台线程异常和未捕获异常会写入 `logs\runtime.log`，现场排障时优先查看这个文件。
 

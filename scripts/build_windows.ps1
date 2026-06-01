@@ -45,6 +45,7 @@ $RequiredPaths = @(
     "OnlineDetectionDiagnostics.exe",
     "OnlineDetectionCameraCheck.exe",
     "OnlineDetectionLineCheck.exe",
+    "OnlineDetectionMvsList.exe",
     "config.json",
     "app/qml/main.qml",
     "app/resources/styles/theme.qml",
@@ -96,6 +97,10 @@ if not exist "OnlineDetectionLineCheck.exe" (
   echo Missing OnlineDetectionLineCheck.exe
   exit /b 1
 )
+if not exist "OnlineDetectionMvsList.exe" (
+  echo Missing OnlineDetectionMvsList.exe
+  exit /b 1
+)
 if not exist "config.json" (
   echo Missing config.json
   exit /b 1
@@ -122,13 +127,19 @@ setlocal
 cd /d "%~dp0"
 OnlineDetectionLineCheck.exe --config config.json
 "@
-    "03_check_cameras.bat" = @"
+    "03_list_mvs_cameras.bat" = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+OnlineDetectionMvsList.exe
+"@
+    "04_check_cameras.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
 OnlineDetectionCameraCheck.exe --config config.json --frames 1
 "@
-    "04_start_app.bat" = @"
+    "05_start_app.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
@@ -151,13 +162,15 @@ OnlineDetectionApp deployment
 4. Run 00_verify_deployment.bat.
 5. Run 01_run_diagnostics.bat.
 6. Run 02_check_line_signal.bat.
-7. Run 03_check_cameras.bat.
-8. Run 04_start_app.bat.
+7. Run 03_list_mvs_cameras.bat if camera serial numbers need to be confirmed.
+8. Run 04_check_cameras.bat.
+9. Run 05_start_app.bat.
 
 Run diagnostics before production:
    OnlineDetectionDiagnostics.exe --config config.json
 
 Check cameras:
+   OnlineDetectionMvsList.exe
    OnlineDetectionCameraCheck.exe --config config.json --frames 1
 
 Check PLC / line signal:
@@ -178,8 +191,9 @@ $GeneratedFiles = @(
     "00_verify_deployment.bat",
     "01_run_diagnostics.bat",
     "02_check_line_signal.bat",
-    "03_check_cameras.bat",
-    "04_start_app.bat"
+    "03_list_mvs_cameras.bat",
+    "04_check_cameras.bat",
+    "05_start_app.bat"
 )
 $ManifestItems = foreach ($relativePath in $RequiredPaths + $GeneratedFiles) {
     $fullPath = Join-Path $DistRoot $relativePath
