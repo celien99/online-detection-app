@@ -39,6 +39,27 @@ foreach ($dir in @("models", "deployed_models", "deployed_rules", "calibration",
     New-Item -ItemType Directory -Force -Path (Join-Path $DistRoot $dir) | Out-Null
 }
 
+$RequiredPaths = @(
+    "OnlineDetectionApp.exe",
+    "OnlineDetectionDiagnostics.exe",
+    "config.json",
+    "app/qml/main.qml",
+    "app/resources/styles/theme.qml",
+    "app/infrastructure/camera/mvs/MvCameraControl.dll",
+    "models",
+    "deployed_models",
+    "deployed_rules",
+    "calibration",
+    "logs",
+    "screenshots"
+)
+foreach ($relativePath in $RequiredPaths) {
+    $fullPath = Join-Path $DistRoot $relativePath
+    if (-not (Test-Path $fullPath)) {
+        throw "Packaged output is missing required path: $relativePath"
+    }
+}
+
 $Readme = @"
 OnlineDetectionApp deployment
 

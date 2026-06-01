@@ -141,7 +141,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 4. 先运行 `OnlineDetectionDiagnostics.exe --config config.json` 做现场自检。
 5. 运行 `OnlineDetectionApp.exe`。
 
-构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录。需要跳过测试时可使用：
+构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，并检查 GUI/诊断 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1 -SkipTests

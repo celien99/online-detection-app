@@ -44,6 +44,7 @@ from app.services.model_file_service import ModelFileService
 from app.services.platform_sync_service import PlatformSyncService
 from app.viewmodels.seat_model_viewmodel import SeatModelViewModel
 from app.viewmodels.model_deploy_viewmodel import ModelDeployViewModel
+from app.runtime_paths import chdir_to_config_dir, resolve_config_path
 
 
 def _create_camera(camera_config: Dict[str, Any]) -> CameraInterface:
@@ -155,12 +156,13 @@ def main(config_path: str | None = None) -> int:
         os.environ.setdefault("QML_DISABLE_DISK_CACHE", "1")
         os.environ.setdefault("QT_QUICK_CONTROLS_CONF", "qtquickcontrols2.conf")
 
-    if config_path is None:
-        config_path = os.environ.get("SEAT_INSPECTION_CONFIG", "config.json")
-    if not Path(config_path).exists():
-        print(f"Config file not found: {config_path}", file=sys.stderr)
+    config_file = resolve_config_path(config_path)
+    if not config_file.exists():
+        print(f"Config file not found: {config_file}", file=sys.stderr)
         return 1
+    chdir_to_config_dir(config_file)
 
+    config_path = str(config_file.resolve())
     config = ConfigStore(config_path)
     app_config = config.get_app_config()
     alert_config = config.get_alert_config()

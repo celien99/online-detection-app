@@ -131,3 +131,32 @@ def test_diagnostics_json_output_shape(tmp_path: Path, capsys) -> None:
     assert payload["status"] == "FAIL"
     assert isinstance(payload["items"], list)
     assert {"name", "status", "message", "suggestion"} <= set(payload["items"][0])
+
+
+def test_diagnostics_uses_config_directory_for_relative_paths(tmp_path: Path, monkeypatch) -> None:
+    site_dir = tmp_path / "site"
+    site_dir.mkdir()
+    (site_dir / "model.pt").write_bytes(b"model")
+    config_path = site_dir / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "continuous"},
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "file_watcher",
+                    "enabled": True,
+                    "watch_dir": ".",
+                    "efficientad_model_path": "./model.pt",
+                }
+            ],
+            "storage": {"log_dir": ".", "screenshot_dir": "."},
+        },
+    )
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = diagnostics_main(["--config", str(config_path), "--json"])
+
+    assert exit_code == 0
+    assert Path.cwd() == tmp_path
