@@ -30,3 +30,17 @@ def test_pyinstaller_spec_includes_runtime_hidden_imports() -> None:
         "seat_defect_core.classifier.engine",
     ]:
         assert f'"{module_name}"' in spec
+
+
+def test_deployment_includes_model_check_executable_and_batch() -> None:
+    verify_script = (ROOT / "scripts" / "verify_deployment.ps1").read_text(encoding="utf-8")
+    build_script = (ROOT / "scripts" / "build_windows.ps1").read_text(encoding="utf-8")
+    spec = (ROOT / "packaging" / "online_detection_app.spec").read_text(encoding="utf-8")
+
+    assert "OnlineDetectionModelCheck.exe" in verify_script
+    assert "OnlineDetectionModelCheck.exe" in build_script
+    assert "OnlineDetectionModelCheck" in spec
+    assert '"app/model_check.py"' in spec
+    assert '"02_check_models.bat"' in verify_script
+    assert '"02_check_models.bat"' in build_script
+    assert "OnlineDetectionModelCheck.exe --config config.json" in build_script

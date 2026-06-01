@@ -139,13 +139,14 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 2. 将模型放入 `models\`、`deployed_models\`、`deployed_rules\`、`calibration\` 等目录。
 3. 确认测试电脑已安装 Hikrobot MVS 运行环境，且相机能在 MVS 工具中正常取流。
 4. 先运行 `OnlineDetectionDiagnostics.exe --config config.json` 做配置、模型、系统环境自检。
-5. 再运行 `OnlineDetectionLineCheck.exe --config config.json` 确认 PLC/产线信号连接；如需等待一次到位触发，运行 `OnlineDetectionLineCheck.exe --config config.json --wait-trigger --timeout-s 10`。
-6. 与 PLC 工程师确认结果点位时，运行 `OnlineDetectionLineCheck.exe --config config.json --send-test-result NG --defect-code 9001`，观察 `ng_coil`、`done_coil` 和 `defect_code_register`。
-7. 如需确认相机序列号，运行 `OnlineDetectionMvsList.exe` 查看海康 SDK 可见设备和建议的 `mvs://sn/...` 配置。
-8. 先运行 `OnlineDetectionCameraCheck.exe --config config.json --connect-only` 确认海康相机 SDK、相机选择和参数下发；硬触发相机无 PLC 脉冲时不会强制要求取到图。
-9. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples`，配合 PLC 触发脉冲确认抓图链路并保存现场样图。
-10. 现场排障或回传信息时，运行 `OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples --camera-connect-only`，它会聚合配置诊断、PLC/产线信号、MVS 枚举和相机连接结果。
-11. 运行 `OnlineDetectionApp.exe`。
+5. 再运行 `OnlineDetectionModelCheck.exe --config config.json` 做 PyTorch/Ultralytics/Anomalib 导入和模型预热检查；多座椅型号可加 `--seat-model-id <型号ID>`。
+6. 再运行 `OnlineDetectionLineCheck.exe --config config.json` 确认 PLC/产线信号连接；如需等待一次到位触发，运行 `OnlineDetectionLineCheck.exe --config config.json --wait-trigger --timeout-s 10`。
+7. 与 PLC 工程师确认结果点位时，运行 `OnlineDetectionLineCheck.exe --config config.json --send-test-result NG --defect-code 9001`，观察 `ng_coil`、`done_coil` 和 `defect_code_register`。
+8. 如需确认相机序列号，运行 `OnlineDetectionMvsList.exe` 查看海康 SDK 可见设备和建议的 `mvs://sn/...` 配置。
+9. 先运行 `OnlineDetectionCameraCheck.exe --config config.json --connect-only` 确认海康相机 SDK、相机选择和参数下发；硬触发相机无 PLC 脉冲时不会强制要求取到图。
+10. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples`，配合 PLC 触发脉冲确认抓图链路并保存现场样图。
+11. 现场排障或回传信息时，运行 `OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples --camera-connect-only`，它会聚合配置诊断、PLC/产线信号、MVS 枚举和相机连接结果。
+12. 运行 `OnlineDetectionApp.exe`。
 
 如果测试电脑第一次配置，可用向导从生产模板生成配置：
 
@@ -155,11 +156,11 @@ OnlineDetectionConfigWizard.exe --template config.production.example.json --outp
 
 多相机时重复传入 `--camera-sn` 和 `--camera-id`；PLC 点位可用 `--point ok_coil=14 --point ng_coil=15` 覆盖。
 
-部署目录也会生成可双击的批处理脚本：`00_create_production_config.bat`、`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_line_signal.bat`、`03_send_plc_ng_test.bat`、`04_list_mvs_cameras.bat`、`05_check_camera_connections.bat`、`06_grab_camera_samples.bat`、`07_collect_site_report.bat`、`08_start_app.bat`。
+部署目录也会生成可双击的批处理脚本：`00_create_production_config.bat`、`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_models.bat`、`03_check_line_signal.bat`、`04_send_plc_ng_test.bat`、`05_list_mvs_cameras.bat`、`06_check_camera_connections.bat`、`07_grab_camera_samples.bat`、`08_collect_site_report.bat`、`09_start_app.bat`。
 
 GUI 启动、后台线程异常和未捕获异常会写入 `logs\runtime.log`。现场排障时优先回传 `site_report.json`、`camera_samples\` 和 `logs\runtime.log`。
 
-构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，写入 `BUILD_INFO.txt` 和 `MANIFEST.json`，压缩成 zip，并检查 GUI/诊断/配置向导/相机检查/产线信号检查/MVS 枚举/现场报告 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
+构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，写入 `BUILD_INFO.txt` 和 `MANIFEST.json`，压缩成 zip，并检查 GUI/诊断/配置向导/模型检查/相机检查/产线信号检查/MVS 枚举/现场报告 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1 -SkipTests

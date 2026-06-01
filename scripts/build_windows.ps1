@@ -45,6 +45,7 @@ $RequiredPaths = @(
     "OnlineDetectionDiagnostics.exe",
     "OnlineDetectionConfigWizard.exe",
     "OnlineDetectionCameraCheck.exe",
+    "OnlineDetectionModelCheck.exe",
     "OnlineDetectionLineCheck.exe",
     "OnlineDetectionMvsList.exe",
     "OnlineDetectionSiteReport.exe",
@@ -100,6 +101,10 @@ if not exist "OnlineDetectionCameraCheck.exe" (
   echo Missing OnlineDetectionCameraCheck.exe
   exit /b 1
 )
+if not exist "OnlineDetectionModelCheck.exe" (
+  echo Missing OnlineDetectionModelCheck.exe
+  exit /b 1
+)
 if not exist "OnlineDetectionLineCheck.exe" (
   echo Missing OnlineDetectionLineCheck.exe
   exit /b 1
@@ -152,44 +157,50 @@ setlocal
 cd /d "%~dp0"
 OnlineDetectionDiagnostics.exe --config config.json
 "@
-    "02_check_line_signal.bat" = @"
+    "02_check_models.bat" = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+OnlineDetectionModelCheck.exe --config config.json
+"@
+    "03_check_line_signal.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
 OnlineDetectionLineCheck.exe --config config.json
 "@
-    "03_send_plc_ng_test.bat" = @"
+    "04_send_plc_ng_test.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
 echo This sends one NG test result to PLC/result points.
 OnlineDetectionLineCheck.exe --config config.json --send-test-result NG --defect-code 9001
 "@
-    "04_list_mvs_cameras.bat" = @"
+    "05_list_mvs_cameras.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
 OnlineDetectionMvsList.exe
 "@
-    "05_check_camera_connections.bat" = @"
+    "06_check_camera_connections.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
 OnlineDetectionCameraCheck.exe --config config.json --connect-only
 "@
-    "06_grab_camera_samples.bat" = @"
+    "07_grab_camera_samples.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
 OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples
 "@
-    "07_collect_site_report.bat" = @"
+    "08_collect_site_report.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
 OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples --camera-connect-only
 "@
-    "08_start_app.bat" = @"
+    "09_start_app.bat" = @"
 @echo off
 setlocal
 cd /d "%~dp0"
@@ -212,16 +223,21 @@ OnlineDetectionApp deployment
 4. Put model files under models/, deployed_models/, deployed_rules/, and calibration/.
 5. Run 00_verify_deployment.bat.
 6. Run 01_run_diagnostics.bat.
-7. Run 02_check_line_signal.bat.
-8. Run 03_send_plc_ng_test.bat with the PLC engineer watching ng_coil, done_coil, and defect_code_register.
-9. Run 04_list_mvs_cameras.bat if camera serial numbers need to be confirmed.
-10. Run 05_check_camera_connections.bat.
-11. Run 06_grab_camera_samples.bat while providing camera trigger pulses if cameras are hardware-triggered.
-12. Run 07_collect_site_report.bat and send site_report.json plus camera_samples\ if troubleshooting is needed.
-13. Run 08_start_app.bat.
+7. Run 02_check_models.bat.
+8. Run 03_check_line_signal.bat.
+9. Run 04_send_plc_ng_test.bat with the PLC engineer watching ng_coil, done_coil, and defect_code_register.
+10. Run 05_list_mvs_cameras.bat if camera serial numbers need to be confirmed.
+11. Run 06_check_camera_connections.bat.
+12. Run 07_grab_camera_samples.bat while providing camera trigger pulses if cameras are hardware-triggered.
+13. Run 08_collect_site_report.bat and send site_report.json plus camera_samples\ if troubleshooting is needed.
+14. Run 09_start_app.bat.
 
 Run diagnostics before production:
    OnlineDetectionDiagnostics.exe --config config.json
+
+Check model runtime:
+   OnlineDetectionModelCheck.exe --config config.json
+   OnlineDetectionModelCheck.exe --config config.json --seat-model-id <seat-model-id>
 
 Generate production config:
    OnlineDetectionConfigWizard.exe --template config.production.example.json --output config.json --camera-sn <camera-serial> --plc-host <plc-ip> --force
@@ -253,13 +269,14 @@ $GeneratedFiles = @(
     "00_create_production_config.bat",
     "00_verify_deployment.bat",
     "01_run_diagnostics.bat",
-    "02_check_line_signal.bat",
-    "03_send_plc_ng_test.bat",
-    "04_list_mvs_cameras.bat",
-    "05_check_camera_connections.bat",
-    "06_grab_camera_samples.bat",
-    "07_collect_site_report.bat",
-    "08_start_app.bat"
+    "02_check_models.bat",
+    "03_check_line_signal.bat",
+    "04_send_plc_ng_test.bat",
+    "05_list_mvs_cameras.bat",
+    "06_check_camera_connections.bat",
+    "07_grab_camera_samples.bat",
+    "08_collect_site_report.bat",
+    "09_start_app.bat"
 )
 $ManifestItems = foreach ($relativePath in $RequiredPaths + $GeneratedFiles) {
     $fullPath = Join-Path $DistRoot $relativePath

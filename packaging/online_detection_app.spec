@@ -172,6 +172,38 @@ camera_check_exe = EXE(
     entitlements_file=None,
 )
 
+model_check = Analysis(
+    ["app/model_check.py"],
+    pathex=[str(ROOT)],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+model_check_pyz = PYZ(model_check.pure)
+model_check_exe = EXE(
+    model_check_pyz,
+    model_check.scripts,
+    [],
+    exclude_binaries=True,
+    name="OnlineDetectionModelCheck",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
 line_check = Analysis(
     ["app/line_check.py"],
     pathex=[str(ROOT)],
@@ -273,6 +305,7 @@ coll = COLLECT(
     diagnostics_exe,
     production_config_exe,
     camera_check_exe,
+    model_check_exe,
     line_check_exe,
     mvs_list_exe,
     site_report_exe,
@@ -284,6 +317,8 @@ coll = COLLECT(
     production_config.datas,
     camera_check.binaries,
     camera_check.datas,
+    model_check.binaries,
+    model_check.datas,
     line_check.binaries,
     line_check.datas,
     mvs_list.binaries,

@@ -37,12 +37,12 @@ class InspectionService:
         )
         self._inspector = SeatDefectInspector(inspection_cfg)
 
-    def warmup(self) -> None:
+    def warmup(self, *, seat_model_id: Optional[str] = None) -> None:
         if self._warmed_up:
             return
         if self._inspector is None:
             self.init_inspector()
-        self._inspector.warmup()
+        self._inspector.warmup(seat_model_id=seat_model_id)
         self._warmed_up = True
 
     def inspect_sync(
