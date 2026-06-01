@@ -113,6 +113,34 @@ def test_diagnostics_warns_when_production_mvs_source_is_not_hardware_triggered(
     assert any(item.name == "CAM_A 触发模式" and item.status == "WARN" for item in report.items)
 
 
+def test_diagnostics_fails_when_production_template_placeholders_remain(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "triggered"},
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "mvs",
+                    "source": "mvs://sn/REPLACE_WITH_CAMERA_SN?trigger=hardware&trigger_source=Line0",
+                    "enabled": True,
+                    "efficientad_model_path": "./models/<camera-model>.pt",
+                }
+            ],
+            "line_signal": {"enabled": True, "type": "modbus", "host": "REPLACE_WITH_PLC_IP", "port": 502},
+            "storage": {"log_dir": str(tmp_path), "screenshot_dir": str(tmp_path)},
+        },
+    )
+
+    report = ProductionDiagnostics(ConfigStore(str(config_path)), config_path).run()
+
+    assert report.status == "FAIL"
+    assert any(item.name == "相机 CAM_A source" and item.status == "FAIL" for item in report.items)
+    assert any(item.name == "CAM_A EfficientAD 模型" and item.status == "FAIL" for item in report.items)
+    assert any(item.name == "产线触发" and item.status == "FAIL" for item in report.items)
+
+
 def test_diagnostics_json_output_shape(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.json"
     _write_config(

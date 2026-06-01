@@ -11,6 +11,8 @@ from urllib.parse import parse_qs, urlparse
 
 from app.infrastructure.config_store import ConfigStore
 
+PLACEHOLDER_MARKERS = ("REPLACE_WITH", "<", ">")
+
 
 @dataclass(slots=True)
 class DiagnosticItem:
@@ -84,6 +86,15 @@ class ProductionDiagnostics:
                         suggestion="为相机配置 mvs://、rtsp:// 或 rtmp:// 输入源",
                     )
                 )
+            if source and _looks_like_placeholder(source):
+                items.append(
+                    DiagnosticItem(
+                        name=f"相机 {camera_id} source",
+                        status="FAIL",
+                        message=f"source 仍包含模板占位符: {source}",
+                        suggestion="使用 OnlineDetectionConfigWizard.exe 或手工替换为真实相机序列号/IP",
+                    )
+                )
             if cam.get("type") == "mvs":
                 items.extend(self._check_mvs_camera_source(camera_id, source))
         return items
@@ -149,6 +160,16 @@ class ProductionDiagnostics:
                 checks.append(("过滤分类器", cam.get("filter_classifier", {}).get("model_path")))
             for label, raw_path in checks:
                 if not raw_path:
+                    continue
+                if _looks_like_placeholder(str(raw_path)):
+                    items.append(
+                        DiagnosticItem(
+                            name=f"{camera_id} {label}",
+                            status="FAIL",
+                            message=f"路径仍包含模板占位符: {raw_path}",
+                            suggestion="替换为测试电脑上的真实模型、规则或标定文件路径",
+                        )
+                    )
                     continue
                 path = self._resolve_path(raw_path)
                 if path.exists():
@@ -228,11 +249,21 @@ class ProductionDiagnostics:
             ]
         adapter_type = line_cfg.get("type", "")
         if adapter_type == "modbus":
+            host = str(line_cfg.get("host", "192.168.1.100"))
+            if _looks_like_placeholder(host):
+                return [
+                    DiagnosticItem(
+                        name="产线触发",
+                        status="FAIL",
+                        message=f"PLC host 仍包含模板占位符: {host}",
+                        suggestion="使用 OnlineDetectionConfigWizard.exe 或手工替换为真实 PLC IP",
+                    )
+                ]
             return [
                 DiagnosticItem(
                     name="产线触发",
                     status="OK",
-                    message=f"Modbus PLC {line_cfg.get('host', '192.168.1.100')}:{line_cfg.get('port', 502)}",
+                    message=f"Modbus PLC {host}:{line_cfg.get('port', 502)}",
                 )
             ]
         if adapter_type == "labview_tcp":
@@ -297,3 +328,10 @@ def _overall_status(items: list[DiagnosticItem]) -> str:
     if "WARN" in statuses:
         return "WARN"
     return "OK"
+
+
+def _looks_like_placeholder(value: str) -> bool:
+    normalized = value.strip()
+    if not normalized:
+        return False
+    return any(marker in normalized for marker in PLACEHOLDER_MARKERS)
