@@ -43,6 +43,7 @@ from app.services.platform_sync_service import PlatformSyncService
 from app.viewmodels.seat_model_viewmodel import SeatModelViewModel
 from app.viewmodels.model_deploy_viewmodel import ModelDeployViewModel
 from app.runtime_paths import chdir_to_config_dir, resolve_config_path
+from app.runtime_logging import get_runtime_logger, setup_runtime_logging
 
 
 def _create_plc(plc_config: Dict[str, Any]) -> PLCInterface:
@@ -117,6 +118,7 @@ class QmlHotReload:
 
 
 def main(config_path: str | None = None) -> int:
+    logger = get_runtime_logger()
     dev_mode = "--dev" in sys.argv
     if dev_mode:
         os.environ.setdefault("QML_DISABLE_DISK_CACHE", "1")
@@ -137,6 +139,9 @@ def main(config_path: str | None = None) -> int:
 
     # ── Persistence ──
     storage_cfg = config.get_storage_config()
+    log_path = setup_runtime_logging(storage_cfg.get("log_dir", "./logs"))
+    logger = get_runtime_logger()
+    logger.info("Starting application config=%s mode=%s runtime_log=%s", config_path, runtime_mode, log_path)
     db_path = str(Path(storage_cfg.get("log_dir", "./logs")) / "inspection.db")
     persistence = ConfigPersistenceService(db_path)
     persistence.migrate_from_json(config_path)
@@ -196,6 +201,7 @@ def main(config_path: str | None = None) -> int:
             camera_manager.register(camera)
             camera_ids.append(camera.camera_id)
         except Exception as exc:
+            logger.exception("Failed to create camera %s", cam_config.get("camera_id", "?"))
             print(f"Failed to create camera {cam_config.get('camera_id', '?')}: {exc}", file=sys.stderr)
 
     camera_manager.connect_all()
@@ -204,10 +210,12 @@ def main(config_path: str | None = None) -> int:
     try:
         plc.connect()
     except Exception:
+        logger.exception("PLC connection failed")
         pass
     try:
         line_signal.connect()
     except Exception:
+        logger.exception("Line signal connection failed")
         pass
 
     # ── Start camera watchdog ──
@@ -272,6 +280,7 @@ def main(config_path: str | None = None) -> int:
     engine.load(QUrl.fromLocalFile(qml_path))
 
     if not engine.rootObjects():
+        logger.error("Failed to load QML from %s", qml_path)
         print("Failed to load QML", file=sys.stderr)
         return 1
 
@@ -298,6 +307,7 @@ def main(config_path: str | None = None) -> int:
             engine.load(QUrl.fromLocalFile(qml_path))
             objs = engine.rootObjects()
             if not objs:
+                logger.error("QML hot reload produced no root objects")
                 print("[hot-reload] QML reload produced no root objects", file=sys.stderr)
                 return
             new_root = objs[0]
@@ -317,6 +327,7 @@ def main(config_path: str | None = None) -> int:
 
         _qml_watcher.start()
         print(f"[hot-reload] Watching {_qml_dir} for QML changes...")
+        logger.info("QML hot reload watching %s", _qml_dir)
 
     # ── Inspection Loop ──
     running = True
@@ -367,6 +378,7 @@ def main(config_path: str | None = None) -> int:
                 _handle_inspection_response(response, valid_frames)
 
             except Exception as exc:
+                logger.exception("Inspection loop failed; marking frames as REJECT")
                 # Fail-safe: treat inference failure as potential defect so no
                 # real defect escapes detection due to a pipeline error.
                 for cid in valid_frames:
@@ -395,9 +407,11 @@ def main(config_path: str | None = None) -> int:
         )
         main_vm.set_trigger_service(trigger_service)
         trigger_service.start()
+        logger.info("Started triggered inspection service")
     else:
         thread = threading.Thread(target=inspection_loop, daemon=True, name="inspection-loop")
         thread.start()
+        logger.info("Started continuous inspection loop")
 
     # ── Timeout checker timer ──
     timer = QTimer()
@@ -410,6 +424,7 @@ def main(config_path: str | None = None) -> int:
     # ── Clean shutdown ──
     def cleanup() -> None:
         nonlocal running
+        logger.info("Application cleanup started")
         running = False
         if dev_mode:
             _qml_watcher.stop()
@@ -421,12 +436,14 @@ def main(config_path: str | None = None) -> int:
         line_signal.disconnect()
         plc.disconnect()
         inspection_service.shutdown()
+        logger.info("Application cleanup finished")
 
     signal.signal(signal.SIGINT, lambda sig, frame: (cleanup(), app.quit()))
     signal.signal(signal.SIGTERM, lambda sig, frame: (cleanup(), app.quit()))
 
     result = app.exec()
     cleanup()
+    logger.info("Application exited with code %s", result)
     return result
 
 

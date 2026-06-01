@@ -145,6 +145,8 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 
 部署目录也会生成可双击的批处理脚本：`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_line_signal.bat`、`03_check_cameras.bat`、`04_start_app.bat`。
 
+GUI 启动、后台线程异常和未捕获异常会写入 `logs\runtime.log`，现场排障时优先查看这个文件。
+
 构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，写入 `BUILD_INFO.txt` 和 `MANIFEST.json`，压缩成 zip，并检查 GUI/诊断/相机检查/产线信号检查 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
 
 ```powershell

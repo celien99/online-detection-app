@@ -166,6 +166,9 @@ Check PLC / line signal:
 
 Main GUI:
    OnlineDetectionApp.exe
+
+Runtime log:
+   logs\runtime.log
 "@
 $Readme | Set-Content -Encoding UTF8 (Join-Path $DistRoot "DEPLOYMENT.txt")
 
