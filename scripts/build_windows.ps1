@@ -75,6 +75,70 @@ config_template=$ConfigTemplate
 "@
 $BuildInfo | Set-Content -Encoding UTF8 (Join-Path $DistRoot "BUILD_INFO.txt")
 
+$BatchFiles = @{
+    "00_verify_deployment.bat" = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+if not exist "OnlineDetectionApp.exe" (
+  echo Missing OnlineDetectionApp.exe
+  exit /b 1
+)
+if not exist "OnlineDetectionDiagnostics.exe" (
+  echo Missing OnlineDetectionDiagnostics.exe
+  exit /b 1
+)
+if not exist "OnlineDetectionCameraCheck.exe" (
+  echo Missing OnlineDetectionCameraCheck.exe
+  exit /b 1
+)
+if not exist "OnlineDetectionLineCheck.exe" (
+  echo Missing OnlineDetectionLineCheck.exe
+  exit /b 1
+)
+if not exist "config.json" (
+  echo Missing config.json
+  exit /b 1
+)
+if not exist "app\qml\main.qml" (
+  echo Missing app\qml\main.qml
+  exit /b 1
+)
+if not exist "app\infrastructure\camera\mvs\MvCameraControl.dll" (
+  echo Missing MvCameraControl.dll
+  exit /b 1
+)
+echo Deployment file check passed.
+"@
+    "01_run_diagnostics.bat" = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+OnlineDetectionDiagnostics.exe --config config.json
+"@
+    "02_check_line_signal.bat" = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+OnlineDetectionLineCheck.exe --config config.json
+"@
+    "03_check_cameras.bat" = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+OnlineDetectionCameraCheck.exe --config config.json --frames 1
+"@
+    "04_start_app.bat" = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+OnlineDetectionApp.exe
+"@
+}
+foreach ($entry in $BatchFiles.GetEnumerator()) {
+    $entry.Value | Set-Content -Encoding ASCII (Join-Path $DistRoot $entry.Key)
+}
+
 $Readme = @"
 OnlineDetectionApp deployment
 
@@ -84,9 +148,11 @@ OnlineDetectionApp deployment
    - model, rule, and calibration paths
 2. Install Hikrobot MVS runtime on the test computer if the bundled DLL is not enough for the camera model.
 3. Put model files under models/, deployed_models/, deployed_rules/, and calibration/.
-4. Run OnlineDetectionLineCheck.exe --config config.json before starting production.
-5. Run OnlineDetectionCameraCheck.exe --config config.json --frames 1 before starting production.
-6. Run OnlineDetectionApp.exe.
+4. Run 00_verify_deployment.bat.
+5. Run 01_run_diagnostics.bat.
+6. Run 02_check_line_signal.bat.
+7. Run 03_check_cameras.bat.
+8. Run 04_start_app.bat.
 
 Run diagnostics before production:
    OnlineDetectionDiagnostics.exe --config config.json
@@ -103,7 +169,16 @@ Main GUI:
 "@
 $Readme | Set-Content -Encoding UTF8 (Join-Path $DistRoot "DEPLOYMENT.txt")
 
-$ManifestItems = foreach ($relativePath in $RequiredPaths + @("BUILD_INFO.txt", "DEPLOYMENT.txt")) {
+$GeneratedFiles = @(
+    "BUILD_INFO.txt",
+    "DEPLOYMENT.txt",
+    "00_verify_deployment.bat",
+    "01_run_diagnostics.bat",
+    "02_check_line_signal.bat",
+    "03_check_cameras.bat",
+    "04_start_app.bat"
+)
+$ManifestItems = foreach ($relativePath in $RequiredPaths + $GeneratedFiles) {
     $fullPath = Join-Path $DistRoot $relativePath
     [pscustomobject]@{
         path = $relativePath

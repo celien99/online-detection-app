@@ -21,7 +21,12 @@ $RequiredPaths = @(
     "screenshots",
     "BUILD_INFO.txt",
     "DEPLOYMENT.txt",
-    "MANIFEST.json"
+    "MANIFEST.json",
+    "00_verify_deployment.bat",
+    "01_run_diagnostics.bat",
+    "02_check_line_signal.bat",
+    "03_check_cameras.bat",
+    "04_start_app.bat"
 )
 
 foreach ($relativePath in $RequiredPaths) {

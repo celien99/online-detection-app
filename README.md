@@ -143,6 +143,8 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 6. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1` 确认海康相机 SDK、相机选择和抓图链路。
 7. 运行 `OnlineDetectionApp.exe`。
 
+部署目录也会生成可双击的批处理脚本：`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_line_signal.bat`、`03_check_cameras.bat`、`04_start_app.bat`。
+
 构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，写入 `BUILD_INFO.txt` 和 `MANIFEST.json`，压缩成 zip，并检查 GUI/诊断/相机检查/产线信号检查 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
 
 ```powershell
