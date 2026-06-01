@@ -137,7 +137,7 @@ OnlineDetectionMvsList.exe
 @echo off
 setlocal
 cd /d "%~dp0"
-OnlineDetectionCameraCheck.exe --config config.json --frames 1
+OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples
 "@
     "05_start_app.bat" = @"
 @echo off
@@ -171,7 +171,7 @@ Run diagnostics before production:
 
 Check cameras:
    OnlineDetectionMvsList.exe
-   OnlineDetectionCameraCheck.exe --config config.json --frames 1
+   OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples
 
 Check PLC / line signal:
    OnlineDetectionLineCheck.exe --config config.json

@@ -19,7 +19,9 @@ def test_camera_check_grabs_file_watcher_frame_from_config_directory(tmp_path: P
     input_dir = site_dir / "input" / "CAM_A"
     input_dir.mkdir(parents=True)
     frame_path = input_dir / "frame.jpg"
-    assert cv2.imwrite(str(frame_path), np.zeros((8, 10, 3), dtype=np.uint8))
+    image = np.zeros((8, 10, 3), dtype=np.uint8)
+    image[:, :, 1] = 32
+    assert cv2.imwrite(str(frame_path), image)
     config_path = site_dir / "config.json"
     _write_config(
         config_path,
@@ -37,15 +39,31 @@ def test_camera_check_grabs_file_watcher_frame_from_config_directory(tmp_path: P
     )
     monkeypatch.chdir(tmp_path)
 
-    exit_code = camera_check_main(["--config", str(config_path), "--frames", "1", "--json"])
+    exit_code = camera_check_main([
+        "--config",
+        str(config_path),
+        "--frames",
+        "1",
+        "--save-dir",
+        "camera_samples",
+        "--json",
+    ])
     payload = json.loads(capsys.readouterr().out)
+    item = payload["items"][0]
 
     assert exit_code == 0
     assert Path.cwd() == tmp_path
-    assert payload["items"][0]["status"] == "OK"
-    assert payload["items"][0]["frames_grabbed"] == 1
-    assert payload["items"][0]["width"] == 10
-    assert payload["items"][0]["height"] == 8
+    assert item["status"] == "OK"
+    assert item["frames_grabbed"] == 1
+    assert item["width"] == 10
+    assert item["height"] == 8
+    assert item["mean"] > 0
+    assert item["max_value"] == 32
+    sample_path = site_dir / item["sample_path"]
+    assert sample_path.exists()
+    sample = cv2.imread(str(sample_path), cv2.IMREAD_COLOR)
+    assert sample is not None
+    assert sample.shape[:2] == (8, 10)
 
 
 def test_camera_check_returns_failure_for_missing_camera(tmp_path: Path, capsys) -> None:

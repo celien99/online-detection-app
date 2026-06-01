@@ -10,6 +10,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+import cv2
+import numpy as np
+
 from app.infrastructure.camera.factory import create_camera
 from app.infrastructure.config_store import ConfigStore
 from app.runtime_paths import chdir_to_config_dir, resolve_config_path
@@ -25,6 +28,11 @@ class CameraCheckItem:
     fps: float = 0.0
     frames_grabbed: int = 0
     elapsed_ms: int = 0
+    sample_path: str = ""
+    mean: float = 0.0
+    std: float = 0.0
+    min_value: int = 0
+    max_value: int = 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -33,6 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--camera-id", default="", help="Only check one configured camera")
     parser.add_argument("--frames", type=int, default=1, help="Number of frames to grab per camera")
     parser.add_argument("--timeout-ms", type=int, default=2000, help="Per-frame grab timeout")
+    parser.add_argument("--save-dir", default="", help="Directory for saving the last grabbed frame per camera")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     args = parser.parse_args(argv)
 
@@ -52,7 +61,12 @@ def main(argv: list[str] | None = None) -> int:
             items = [CameraCheckItem(args.camera_id or "<none>", "FAIL", "No matching enabled cameras in config")]
         else:
             items = [
-                check_camera(cam, frames=max(1, args.frames), timeout_ms=max(1, args.timeout_ms))
+                check_camera(
+                    cam,
+                    frames=max(1, args.frames),
+                    timeout_ms=max(1, args.timeout_ms),
+                    save_dir=Path(args.save_dir) if args.save_dir else None,
+                )
                 for cam in camera_configs
             ]
     finally:
@@ -65,11 +79,18 @@ def main(argv: list[str] | None = None) -> int:
     return 1 if any(item.status == "FAIL" for item in items) else 0
 
 
-def check_camera(camera_config: dict[str, Any], *, frames: int = 1, timeout_ms: int = 2000) -> CameraCheckItem:
+def check_camera(
+    camera_config: dict[str, Any],
+    *,
+    frames: int = 1,
+    timeout_ms: int = 2000,
+    save_dir: Path | None = None,
+) -> CameraCheckItem:
     camera_id = str(camera_config.get("camera_id", "<unknown>"))
     started = time.time()
     camera = None
     frames_grabbed = 0
+    last_frame = None
     try:
         camera = create_camera(camera_config)
         camera.connect()
@@ -77,6 +98,7 @@ def check_camera(camera_config: dict[str, Any], *, frames: int = 1, timeout_ms: 
             frame = camera.grab_frame(timeout_ms=timeout_ms)
             if frame is not None:
                 frames_grabbed += 1
+                last_frame = frame
         status = camera.get_status()
         elapsed_ms = int((time.time() - started) * 1000)
         if frames_grabbed <= 0:
@@ -90,6 +112,8 @@ def check_camera(camera_config: dict[str, Any], *, frames: int = 1, timeout_ms: 
                 frames_grabbed=frames_grabbed,
                 elapsed_ms=elapsed_ms,
             )
+        stats = _frame_stats(last_frame)
+        sample_path = _save_sample(camera_id, last_frame, save_dir) if save_dir is not None else ""
         return CameraCheckItem(
             camera_id=camera_id,
             status="OK",
@@ -99,6 +123,11 @@ def check_camera(camera_config: dict[str, Any], *, frames: int = 1, timeout_ms: 
             fps=status.fps,
             frames_grabbed=frames_grabbed,
             elapsed_ms=elapsed_ms,
+            sample_path=sample_path,
+            mean=stats["mean"],
+            std=stats["std"],
+            min_value=stats["min_value"],
+            max_value=stats["max_value"],
         )
     except Exception as exc:
         return CameraCheckItem(
@@ -122,9 +151,33 @@ def _format_items(items: list[CameraCheckItem]) -> str:
         lines.append(
             f"[{item.status}] {item.camera_id}: {item.message} "
             f"frames={item.frames_grabbed} size={item.width}x{item.height} fps={item.fps:.2f} "
-            f"elapsed_ms={item.elapsed_ms}"
+            f"mean={item.mean:.2f} std={item.std:.2f} min={item.min_value} max={item.max_value} "
+            f"sample={item.sample_path or '-'} elapsed_ms={item.elapsed_ms}"
         )
     return "\n".join(lines)
+
+
+def _frame_stats(frame) -> dict[str, float | int]:
+    if frame is None:
+        return {"mean": 0.0, "std": 0.0, "min_value": 0, "max_value": 0}
+    arr = np.asarray(frame)
+    return {
+        "mean": float(arr.mean()),
+        "std": float(arr.std()),
+        "min_value": int(arr.min()),
+        "max_value": int(arr.max()),
+    }
+
+
+def _save_sample(camera_id: str, frame, save_dir: Path) -> str:
+    if frame is None:
+        return ""
+    save_dir.mkdir(parents=True, exist_ok=True)
+    safe_camera_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in camera_id)
+    path = save_dir / f"{safe_camera_id}_sample.jpg"
+    if not cv2.imwrite(str(path), frame):
+        raise RuntimeError(f"Failed to write camera sample: {path}")
+    return str(path)
 
 
 if __name__ == "__main__":
