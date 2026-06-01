@@ -61,7 +61,7 @@ class MvsCameraAdapter(CameraInterface):
     def grab_frame(self, timeout_ms: int = 1000) -> np.ndarray | None:
         if self._capture is None:
             return None
-        success, frame = self._capture.read()
+        success, frame = self._capture.read(timeout_ms=timeout_ms)
         if success and frame is not None:
             self._frames_grabbed += 1
             return frame

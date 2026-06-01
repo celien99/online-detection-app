@@ -1,6 +1,9 @@
 """Tests for Hikrobot MVS source parsing."""
 from __future__ import annotations
 
+import numpy as np
+
+from app.infrastructure.camera.mvs_adapter import MvsCameraAdapter
 from app.infrastructure.camera.mvs.frame_source import parse_mvs_source
 
 
@@ -24,3 +27,26 @@ def test_parse_software_trigger_source() -> None:
     assert cfg.trigger_mode == "software"
     assert cfg.trigger_source == "software"
     assert cfg.grab_timeout_ms == 250
+
+
+def test_mvs_adapter_passes_grab_timeout_to_capture() -> None:
+    class FakeCapture:
+        def __init__(self) -> None:
+            self.timeout_ms = None
+
+        def isOpened(self):
+            return True
+
+        def read(self, timeout_ms=None):
+            self.timeout_ms = timeout_ms
+            return True, np.zeros((2, 3, 3), dtype=np.uint8)
+
+    capture = FakeCapture()
+    adapter = MvsCameraAdapter("CAM_A", "mvs://0?timeout_ms=250")
+    adapter._capture = capture
+
+    frame = adapter.grab_frame(timeout_ms=4321)
+
+    assert frame is not None
+    assert capture.timeout_ms == 4321
+    assert adapter.get_status().frames_grabbed == 1

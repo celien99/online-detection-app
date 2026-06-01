@@ -187,14 +187,14 @@ class MvsCameraCapture:
         """返回相机是否已成功打开。"""
         return self._camera.opened
 
-    def read(self) -> tuple[bool, Any]:
+    def read(self, timeout_ms: int | None = None) -> tuple[bool, Any]:
         """读取一帧 BGR 图像。
 
         返回值保持和 `cv2.VideoCapture.read()` 一致：
         - `(True, frame)` 表示成功
         - `(False, None)` 表示超时或未取到帧
         """
-        frame = self._camera.get_frame(timeout_ms=self._config.grab_timeout_ms)
+        frame = self._camera.get_frame(timeout_ms=timeout_ms or self._config.grab_timeout_ms)
         if frame is None:
             return False, None
         return True, frame
