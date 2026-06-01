@@ -143,7 +143,7 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
     config.json once the site PLC address table is known.
     """
 
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict, client_factory=None) -> None:
         self._host = config.get("host", "192.168.1.100")
         self._port = int(config.get("port", 502))
         self._capture_request_coil = int(config.get("capture_request_coil", 10))
@@ -160,8 +160,12 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
         self._defect_code_register = int(config.get("defect_code_register", 60))
         self._fault_code_register = int(config.get("fault_code_register", 61))
         self._clear_request_on_ack = bool(config.get("clear_request_on_ack", False))
+        self._pulse_width_s = float(config.get("pulse_width_s", 0.05))
+        self._reconnect_interval_s = float(config.get("reconnect_interval_s", 2.0))
         self._connected = False
         self._client = None
+        self._client_factory = client_factory
+        self._last_connect_attempt = 0.0
         self._last_request_state = False
         self._last_request_id = 0
 
@@ -174,9 +178,14 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
         return self._connected
 
     def connect(self) -> None:
-        from pymodbus.client import ModbusTcpClient
+        if self._client_factory is None:
+            from pymodbus.client import ModbusTcpClient
 
-        self._client = ModbusTcpClient(self._host, port=self._port)
+            self._client_factory = lambda host, port: ModbusTcpClient(host, port=port)
+
+        self.disconnect()
+        self._last_connect_attempt = time.time()
+        self._client = self._client_factory(self._host, self._port)
         self._connected = bool(self._client.connect())
 
     def disconnect(self) -> None:
@@ -186,9 +195,11 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
         self._connected = False
 
     def poll_capture_request(self) -> CaptureRequest | None:
-        if self._client is None or not self._connected:
+        if not self._ensure_connected():
             return None
-        result = self._client.read_coils(self._capture_request_coil, 1)
+        result = self._read_coils(self._capture_request_coil, 1)
+        if result is None:
+            return None
         if result.isError():
             return None
         current = bool(result.bits[0])
@@ -212,28 +223,31 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
         return request
 
     def send_busy(self, request: CaptureRequest, busy: bool) -> None:
-        if self._client is not None and self._connected:
-            self._client.write_coil(self._busy_coil, busy)
+        if self._ensure_connected():
+            self._write_coil(self._busy_coil, busy)
 
     def send_result(self, result: InspectionResultSignal) -> None:
-        if self._client is None or not self._connected:
+        if not self._ensure_connected():
             return
-        self._client.write_register(self._defect_code_register, int(result.defect_code))
-        self._client.write_coil(self._ok_coil, result.status == InspectionDecision.OK)
-        self._client.write_coil(self._ng_coil, result.status == InspectionDecision.NG)
-        self._client.write_coil(self._reject_coil, result.status == InspectionDecision.REJECT)
+        self._write_register(self._defect_code_register, int(result.defect_code))
+        self._clear_result_coils()
+        self._write_coil(self._ok_coil, result.status == InspectionDecision.OK)
+        self._write_coil(self._ng_coil, result.status == InspectionDecision.NG)
+        self._write_coil(self._reject_coil, result.status == InspectionDecision.REJECT)
         self._pulse_coil(self._done_coil)
 
     def send_fault(self, request: CaptureRequest | None, code: str, message: str) -> None:
-        if self._client is None or not self._connected:
+        if not self._ensure_connected():
             return
-        self._client.write_register(self._fault_code_register, _fault_code_to_int(code))
+        self._write_register(self._fault_code_register, _fault_code_to_int(code))
         self._pulse_coil(self._fault_coil)
 
     def read_line_status(self) -> LineStatus:
-        if self._client is None or not self._connected:
+        if not self._ensure_connected():
             return LineStatus.UNKNOWN
-        result = self._client.read_holding_registers(self._line_status_register, 1)
+        result = self._read_holding_registers(self._line_status_register, 1)
+        if result is None:
+            return LineStatus.UNKNOWN
         if result.isError():
             return LineStatus.UNKNOWN
         return {
@@ -243,17 +257,65 @@ class ModbusLineSignalAdapter(LineSignalAdapter):
         }.get(result.registers[0], LineStatus.UNKNOWN)
 
     def _pulse_coil(self, address: int) -> None:
-        self._client.write_coil(address, True)
-        self._client.write_coil(address, False)
+        self._write_coil(address, True)
+        if self._pulse_width_s > 0:
+            time.sleep(self._pulse_width_s)
+        self._write_coil(address, False)
 
     def _read_register_string(self, start: int, count: int) -> str:
-        result = self._client.read_holding_registers(start, count)
+        result = self._read_holding_registers(start, count)
+        if result is None:
+            return ""
         if result.isError():
             return ""
         raw = bytearray()
         for value in result.registers:
             raw.extend([(value >> 8) & 0xFF, value & 0xFF])
         return raw.rstrip(b"\x00").decode("ascii", errors="ignore").strip()
+
+    def _ensure_connected(self) -> bool:
+        if self._client is not None and self._connected:
+            return True
+        now = time.time()
+        if now - self._last_connect_attempt < self._reconnect_interval_s:
+            return False
+        try:
+            self.connect()
+        except Exception:
+            self.disconnect()
+            return False
+        return self._connected
+
+    def _clear_result_coils(self) -> None:
+        self._write_coil(self._ok_coil, False)
+        self._write_coil(self._ng_coil, False)
+        self._write_coil(self._reject_coil, False)
+
+    def _read_coils(self, address: int, count: int):
+        try:
+            return self._client.read_coils(address, count)
+        except Exception:
+            self.disconnect()
+            return None
+
+    def _read_holding_registers(self, address: int, count: int):
+        try:
+            return self._client.read_holding_registers(address, count)
+        except Exception:
+            self.disconnect()
+            return None
+
+    def _write_coil(self, address: int, value: bool) -> None:
+        try:
+            self._client.write_coil(address, value)
+        except Exception:
+            self.disconnect()
+
+    def _write_register(self, address: int, value: int) -> None:
+        try:
+            self._client.write_register(address, value)
+        except Exception:
+            self.disconnect()
 
 
 def _fault_code_to_int(code: str) -> int:

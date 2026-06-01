@@ -89,6 +89,15 @@ def _create_line_signal(line_config: Dict[str, Any], plc_config: Dict[str, Any])
     raise ValueError(f"Unsupported line signal adapter type: {adapter_type}")
 
 
+def _should_send_legacy_plc_defect(runtime_mode: str, line_config: Dict[str, Any], plc_config: Dict[str, Any]) -> bool:
+    """Keep the old defect pulse only when the line handshake is not authoritative."""
+    if not plc_config.get("enabled", False):
+        return False
+    if runtime_mode == "triggered" and line_config.get("enabled", False):
+        return bool(line_config.get("also_send_legacy_plc_defect", False))
+    return True
+
+
 class QmlHotReload:
     """Watches QML files and sets a flag when changes are detected.
 
@@ -178,8 +187,10 @@ def main(config_path: str | None = None) -> int:
     # ── Infrastructure ──
     camera_manager = CameraManager()
     plc_config = config.get_plc_config()
+    line_config = config.get("line_signal", default={})
     plc = _create_plc(plc_config)
-    line_signal = _create_line_signal(config.get("line_signal", default={}), plc_config)
+    line_signal = _create_line_signal(line_config, plc_config)
+    send_legacy_plc_defect = _should_send_legacy_plc_defect(runtime_mode, line_config, plc_config)
     log_engine = LogEngine(
         db_path=str(Path(config.get_storage_config().get("log_dir", "./logs")) / "inspection.db"),
         retention_days=config.get_storage_config().get("log_retention_days", 30),
@@ -363,7 +374,8 @@ def main(config_path: str | None = None) -> int:
                 log_engine.insert(record)
                 if cr.status == "NG":
                     severity = Severity.CRITICAL if getattr(cr, 'severity', '') == 'critical' else Severity.MINOR
-                    plc.send_defect_signal(DefectSignal(camera_id=cr.camera_id, severity=severity))
+                    if send_legacy_plc_defect:
+                        plc.send_defect_signal(DefectSignal(camera_id=cr.camera_id, severity=severity))
                     if hasattr(cr, 'texture_result') and cr.texture_result is not None:
                         amap = getattr(cr.texture_result, 'anomaly_map', None)
                         if amap is not None:
@@ -398,7 +410,8 @@ def main(config_path: str | None = None) -> int:
                     )
                     stats_collector.record(record)
                     log_engine.insert(record)
-                    plc.send_defect_signal(DefectSignal(camera_id=cid, severity=Severity.MINOR))
+                    if send_legacy_plc_defect:
+                        plc.send_defect_signal(DefectSignal(camera_id=cid, severity=Severity.MINOR))
                 main_vm.update_stats_from_collector()
                 time.sleep(0.1)
 

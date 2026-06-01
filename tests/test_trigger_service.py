@@ -10,7 +10,13 @@ import numpy as np
 
 from app.infrastructure.camera.interface import CameraStatus
 from app.infrastructure.camera.manager import CameraManager
-from app.infrastructure.line_signal import InspectionDecision, LabVIEWTcpLineSignalAdapter, VirtualLineSignalAdapter
+from app.infrastructure.line_signal import (
+    InspectionDecision,
+    InspectionResultSignal,
+    LabVIEWTcpLineSignalAdapter,
+    ModbusLineSignalAdapter,
+    VirtualLineSignalAdapter,
+)
 from app.services.trigger_service import TriggerService
 
 
@@ -163,8 +169,6 @@ def test_labview_tcp_adapter_parses_request_and_sends_result() -> None:
     assert request.seat_model_id == "MODEL_A"
 
     adapter.send_busy(request, True)
-    from app.infrastructure.line_signal import InspectionResultSignal
-
     adapter.send_result(
         InspectionResultSignal(
             request_id=request.request_id,
@@ -180,3 +184,132 @@ def test_labview_tcp_adapter_parses_request_and_sends_result() -> None:
     assert received[0]["busy"] is True
     assert received[1]["type"] == "result"
     assert received[1]["status"] == "OK"
+
+
+class FakeModbusResult:
+    def __init__(self, *, bits=None, registers=None, error: bool = False) -> None:
+        self.bits = bits or []
+        self.registers = registers or []
+        self._error = error
+
+    def isError(self) -> bool:
+        return self._error
+
+
+class FakeModbusClient:
+    connect_calls = 0
+    instances: list["FakeModbusClient"] = []
+
+    def __init__(self, host: str, port: int) -> None:
+        self.host = host
+        self.port = port
+        self.connected = False
+        self.coils: dict[int, bool] = {}
+        self.registers: dict[int, int] = {0: 1}
+        self.writes: list[tuple[str, int, int | bool]] = []
+        FakeModbusClient.instances.append(self)
+
+    def connect(self) -> bool:
+        FakeModbusClient.connect_calls += 1
+        self.connected = True
+        return True
+
+    def close(self) -> None:
+        self.connected = False
+
+    def read_coils(self, address: int, count: int):
+        return FakeModbusResult(bits=[self.coils.get(address + offset, False) for offset in range(count)])
+
+    def read_holding_registers(self, address: int, count: int):
+        return FakeModbusResult(registers=[self.registers.get(address + offset, 0) for offset in range(count)])
+
+    def write_coil(self, address: int, value: bool) -> None:
+        self.coils[address] = value
+        self.writes.append(("coil", address, value))
+
+    def write_register(self, address: int, value: int) -> None:
+        self.registers[address] = value
+        self.writes.append(("register", address, value))
+
+
+def _ascii_registers(value: str, count: int = 8) -> list[int]:
+    raw = value.encode("ascii")[: count * 2]
+    raw = raw + b"\x00" * (count * 2 - len(raw))
+    return [(raw[i] << 8) | raw[i + 1] for i in range(0, len(raw), 2)]
+
+
+def test_modbus_adapter_uses_rising_edge_and_result_handshake() -> None:
+    FakeModbusClient.connect_calls = 0
+    FakeModbusClient.instances = []
+    adapter = ModbusLineSignalAdapter(
+        {
+            "host": "10.0.0.10",
+            "port": 502,
+            "pulse_width_s": 0,
+            "capture_request_coil": 10,
+            "capture_ack_coil": 11,
+            "busy_coil": 12,
+            "done_coil": 13,
+            "ok_coil": 14,
+            "ng_coil": 15,
+            "reject_coil": 16,
+            "defect_code_register": 60,
+            "part_id_register": 20,
+            "seat_model_register": 40,
+        },
+        client_factory=FakeModbusClient,
+    )
+    adapter.connect()
+    client = FakeModbusClient.instances[-1]
+    for offset, value in enumerate(_ascii_registers("P100")):
+        client.registers[20 + offset] = value
+    for offset, value in enumerate(_ascii_registers("MODEL_A")):
+        client.registers[40 + offset] = value
+
+    assert adapter.poll_capture_request() is None
+    client.coils[10] = True
+    request = adapter.poll_capture_request()
+    assert request is not None
+    assert request.part_id == "P100"
+    assert request.seat_model_id == "MODEL_A"
+    assert adapter.poll_capture_request() is None
+
+    adapter.send_busy(request, True)
+    adapter.send_result(
+        InspectionResultSignal(
+            request_id=request.request_id,
+            status=InspectionDecision.NG,
+            part_id=request.part_id,
+            defect_code=7,
+        )
+    )
+
+    assert client.coils[12] is True
+    assert client.registers[60] == 7
+    assert client.coils[14] is False
+    assert client.coils[15] is True
+    assert client.coils[16] is False
+    assert ("coil", 13, True) in client.writes
+    assert client.writes[-1] == ("coil", 13, False)
+
+
+def test_modbus_adapter_reconnects_after_write_failure() -> None:
+    class FailingWriteClient(FakeModbusClient):
+        def write_coil(self, address: int, value: bool) -> None:
+            raise OSError("connection lost")
+
+    FakeModbusClient.connect_calls = 0
+    FakeModbusClient.instances = []
+    adapter = ModbusLineSignalAdapter(
+        {"reconnect_interval_s": 0, "pulse_width_s": 0},
+        client_factory=FailingWriteClient,
+    )
+    adapter.connect()
+    request = type("Request", (), {"request_id": "REQ1", "part_id": ""})()
+    adapter.send_busy(request, True)
+    assert not adapter.connected
+
+    status = adapter.read_line_status()
+    assert status.value == "running"
+    assert adapter.connected
+    assert FakeModbusClient.connect_calls >= 2
