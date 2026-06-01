@@ -145,11 +145,19 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 8. 现场排障或回传信息时，运行 `OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples`，它会聚合配置诊断、PLC/产线信号、MVS 枚举和相机抓图结果。
 9. 运行 `OnlineDetectionApp.exe`。
 
-部署目录也会生成可双击的批处理脚本：`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_line_signal.bat`、`03_list_mvs_cameras.bat`、`04_check_cameras.bat`、`05_collect_site_report.bat`、`06_start_app.bat`。
+如果测试电脑第一次配置，可用向导从生产模板生成配置：
+
+```powershell
+OnlineDetectionConfigWizard.exe --template config.production.example.json --output config.json --camera-sn <相机序列号> --plc-host <PLC IP> --force
+```
+
+多相机时重复传入 `--camera-sn` 和 `--camera-id`；PLC 点位可用 `--point ok_coil=14 --point ng_coil=15` 覆盖。
+
+部署目录也会生成可双击的批处理脚本：`00_create_production_config.bat`、`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_line_signal.bat`、`03_list_mvs_cameras.bat`、`04_check_cameras.bat`、`05_collect_site_report.bat`、`06_start_app.bat`。
 
 GUI 启动、后台线程异常和未捕获异常会写入 `logs\runtime.log`。现场排障时优先回传 `site_report.json`、`camera_samples\` 和 `logs\runtime.log`。
 
-构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，写入 `BUILD_INFO.txt` 和 `MANIFEST.json`，压缩成 zip，并检查 GUI/诊断/相机检查/产线信号检查/MVS 枚举/现场报告 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
+构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，写入 `BUILD_INFO.txt` 和 `MANIFEST.json`，压缩成 zip，并检查 GUI/诊断/配置向导/相机检查/产线信号检查/MVS 枚举/现场报告 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1 -SkipTests

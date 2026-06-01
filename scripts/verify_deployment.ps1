@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 $RequiredPaths = @(
     "OnlineDetectionApp.exe",
     "OnlineDetectionDiagnostics.exe",
+    "OnlineDetectionConfigWizard.exe",
     "OnlineDetectionCameraCheck.exe",
     "OnlineDetectionLineCheck.exe",
     "OnlineDetectionMvsList.exe",
@@ -24,6 +25,7 @@ $RequiredPaths = @(
     "BUILD_INFO.txt",
     "DEPLOYMENT.txt",
     "MANIFEST.json",
+    "00_create_production_config.bat",
     "00_verify_deployment.bat",
     "01_run_diagnostics.bat",
     "02_check_line_signal.bat",

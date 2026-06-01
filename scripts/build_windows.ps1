@@ -43,6 +43,7 @@ foreach ($dir in @("models", "deployed_models", "deployed_rules", "calibration",
 $RequiredPaths = @(
     "OnlineDetectionApp.exe",
     "OnlineDetectionDiagnostics.exe",
+    "OnlineDetectionConfigWizard.exe",
     "OnlineDetectionCameraCheck.exe",
     "OnlineDetectionLineCheck.exe",
     "OnlineDetectionMvsList.exe",
@@ -90,6 +91,10 @@ if not exist "OnlineDetectionDiagnostics.exe" (
   echo Missing OnlineDetectionDiagnostics.exe
   exit /b 1
 )
+if not exist "OnlineDetectionConfigWizard.exe" (
+  echo Missing OnlineDetectionConfigWizard.exe
+  exit /b 1
+)
 if not exist "OnlineDetectionCameraCheck.exe" (
   echo Missing OnlineDetectionCameraCheck.exe
   exit /b 1
@@ -119,6 +124,22 @@ if not exist "app\infrastructure\camera\mvs\MvCameraControl.dll" (
   exit /b 1
 )
 echo Deployment file check passed.
+"@
+    "00_create_production_config.bat" = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+set /p CAMERA_SN=Hikrobot camera serial number:
+set /p PLC_HOST=PLC Modbus TCP host:
+if "%CAMERA_SN%"=="" (
+  echo Camera serial number is required.
+  exit /b 1
+)
+if "%PLC_HOST%"=="" (
+  echo PLC host is required.
+  exit /b 1
+)
+OnlineDetectionConfigWizard.exe --template config.production.example.json --output config.json --camera-sn "%CAMERA_SN%" --plc-host "%PLC_HOST%" --force
 "@
     "01_run_diagnostics.bat" = @"
 @echo off
@@ -168,18 +189,22 @@ OnlineDetectionApp deployment
    - camera source: prefer mvs://sn/<camera-serial>?trigger=hardware&trigger_source=Line0
    - line_signal.host/port and Modbus point table
    - model, rule, and calibration paths
-2. Install Hikrobot MVS runtime on the test computer if the bundled DLL is not enough for the camera model.
-3. Put model files under models/, deployed_models/, deployed_rules/, and calibration/.
-4. Run 00_verify_deployment.bat.
-5. Run 01_run_diagnostics.bat.
-6. Run 02_check_line_signal.bat.
-7. Run 03_list_mvs_cameras.bat if camera serial numbers need to be confirmed.
-8. Run 04_check_cameras.bat.
-9. Run 05_collect_site_report.bat and send site_report.json plus camera_samples\ if troubleshooting is needed.
-10. Run 06_start_app.bat.
+2. Or run 00_create_production_config.bat to generate config.json from camera serial and PLC host.
+3. Install Hikrobot MVS runtime on the test computer if the bundled DLL is not enough for the camera model.
+4. Put model files under models/, deployed_models/, deployed_rules/, and calibration/.
+5. Run 00_verify_deployment.bat.
+6. Run 01_run_diagnostics.bat.
+7. Run 02_check_line_signal.bat.
+8. Run 03_list_mvs_cameras.bat if camera serial numbers need to be confirmed.
+9. Run 04_check_cameras.bat.
+10. Run 05_collect_site_report.bat and send site_report.json plus camera_samples\ if troubleshooting is needed.
+11. Run 06_start_app.bat.
 
 Run diagnostics before production:
    OnlineDetectionDiagnostics.exe --config config.json
+
+Generate production config:
+   OnlineDetectionConfigWizard.exe --template config.production.example.json --output config.json --camera-sn <camera-serial> --plc-host <plc-ip> --force
 
 Check cameras:
    OnlineDetectionMvsList.exe
@@ -203,6 +228,7 @@ $Readme | Set-Content -Encoding UTF8 (Join-Path $DistRoot "DEPLOYMENT.txt")
 $GeneratedFiles = @(
     "BUILD_INFO.txt",
     "DEPLOYMENT.txt",
+    "00_create_production_config.bat",
     "00_verify_deployment.bat",
     "01_run_diagnostics.bat",
     "02_check_line_signal.bat",

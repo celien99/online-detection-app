@@ -95,6 +95,38 @@ diagnostics_exe = EXE(
     entitlements_file=None,
 )
 
+production_config = Analysis(
+    ["app/production_config.py"],
+    pathex=[str(ROOT)],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+production_config_pyz = PYZ(production_config.pure)
+production_config_exe = EXE(
+    production_config_pyz,
+    production_config.scripts,
+    [],
+    exclude_binaries=True,
+    name="OnlineDetectionConfigWizard",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
 camera_check = Analysis(
     ["app/camera_check.py"],
     pathex=[str(ROOT)],
@@ -226,6 +258,7 @@ site_report_exe = EXE(
 coll = COLLECT(
     gui_exe,
     diagnostics_exe,
+    production_config_exe,
     camera_check_exe,
     line_check_exe,
     mvs_list_exe,
@@ -234,6 +267,8 @@ coll = COLLECT(
     gui.datas,
     diagnostics.binaries,
     diagnostics.datas,
+    production_config.binaries,
+    production_config.datas,
     camera_check.binaries,
     camera_check.datas,
     line_check.binaries,
