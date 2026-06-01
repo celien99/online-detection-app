@@ -90,6 +90,55 @@ def test_line_check_sends_virtual_test_result(monkeypatch) -> None:
     assert adapters[0].last_result.defect_code == 42
 
 
+def test_line_check_fails_when_test_result_disconnects_adapter(monkeypatch) -> None:
+    class DisconnectingAdapter:
+        enabled = True
+
+        def __init__(self) -> None:
+            self._connected = False
+
+        @property
+        def connected(self):
+            return self._connected
+
+        def connect(self):
+            self._connected = True
+
+        def disconnect(self):
+            self._connected = False
+
+        def poll_capture_request(self):
+            return None
+
+        def send_busy(self, request, busy):
+            pass
+
+        def send_result(self, result):
+            self._connected = False
+
+        def send_fault(self, request, code, message):
+            pass
+
+        def read_line_status(self):
+            from app.infrastructure.plc.interface import LineStatus
+
+            return LineStatus.RUNNING
+
+    monkeypatch.setattr("app.line_check.create_line_signal", lambda line_config, plc_config: DisconnectingAdapter())
+
+    result = check_line_signal(
+        line_config={"enabled": True, "type": "modbus"},
+        plc_config={},
+        send_test_result="NG",
+        defect_code=42,
+    )
+
+    assert result.status == "FAIL"
+    assert result.connected is False
+    assert result.test_result_sent == "NG"
+    assert "adapter disconnected" in result.message
+
+
 def test_line_check_cli_reads_config_and_restores_cwd(tmp_path: Path, monkeypatch, capsys) -> None:
     site_dir = tmp_path / "site"
     site_dir.mkdir()

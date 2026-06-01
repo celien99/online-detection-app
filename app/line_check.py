@@ -101,7 +101,18 @@ def check_line_signal(
                 elapsed_ms=_elapsed_ms(started),
             )
         if not wait_trigger:
-            _send_test_result_if_requested(adapter, send_test_result, defect_code)
+            send_error = _send_test_result_if_requested(adapter, send_test_result, defect_code)
+            if send_error:
+                return LineCheckResult(
+                    status="FAIL",
+                    message=send_error,
+                    adapter_type=adapter_type,
+                    connected=adapter.connected,
+                    line_status=line_status,
+                    test_result_sent=send_test_result,
+                    defect_code=defect_code if send_test_result else 0,
+                    elapsed_ms=_elapsed_ms(started),
+                )
             return LineCheckResult(
                 status="OK",
                 message=_connected_message(send_test_result),
@@ -128,7 +139,27 @@ def check_line_signal(
                 line_status=line_status,
                 elapsed_ms=_elapsed_ms(started),
             )
-        _send_test_result_if_requested(adapter, send_test_result, defect_code, request_id=request.request_id, part_id=request.part_id)
+        send_error = _send_test_result_if_requested(
+            adapter,
+            send_test_result,
+            defect_code,
+            request_id=request.request_id,
+            part_id=request.part_id,
+        )
+        if send_error:
+            return LineCheckResult(
+                status="FAIL",
+                message=send_error,
+                adapter_type=adapter_type,
+                connected=adapter.connected,
+                line_status=line_status,
+                request_id=request.request_id,
+                part_id=request.part_id,
+                seat_model_id=request.seat_model_id or "",
+                test_result_sent=send_test_result,
+                defect_code=defect_code if send_test_result else 0,
+                elapsed_ms=_elapsed_ms(started),
+            )
         return LineCheckResult(
             status="OK",
             message=_trigger_message(send_test_result),
@@ -169,9 +200,9 @@ def _send_test_result_if_requested(
     *,
     request_id: str = "line-check-test",
     part_id: str = "LINE_CHECK",
-) -> None:
+) -> str:
     if not status:
-        return
+        return ""
     decision = InspectionDecision(status)
     adapter.send_result(
         InspectionResultSignal(
@@ -184,6 +215,9 @@ def _send_test_result_if_requested(
             reason="manual_line_check",
         )
     )
+    if not adapter.connected:
+        return f"Sent test result {status}, but adapter disconnected before completion"
+    return ""
 
 
 def _connected_message(test_result: str) -> str:
