@@ -35,6 +35,30 @@ def test_site_report_collects_checks_and_restores_cwd(tmp_path: Path, monkeypatc
     site_dir = tmp_path / "site"
     input_dir = site_dir / "input" / "CAM_A"
     input_dir.mkdir(parents=True)
+    (site_dir / "logs").mkdir()
+    (site_dir / "BUILD_INFO.txt").write_text(
+        "name=OnlineDetectionApp\nversion=0.1.0\ncommit=abc1234\nbuilt_at_utc=2026-06-01T00:00:00Z\n",
+        encoding="utf-8",
+    )
+    (site_dir / "MANIFEST.json").write_text(
+        json.dumps(
+            {
+                "name": "OnlineDetectionApp",
+                "version": "0.1.0",
+                "commit": "abc1234",
+                "built_at_utc": "2026-06-01T00:00:00Z",
+                "items": [
+                    {"path": "OnlineDetectionApp.exe", "exists": True, "type": "file", "size": 1},
+                    {"path": "config.json", "exists": True, "type": "file", "size": 1},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (site_dir / "logs" / "runtime.log").write_text(
+        "\n".join(f"line-{idx}" for idx in range(1, 6)),
+        encoding="utf-8",
+    )
     model_path = site_dir / "model.pt"
     model_path.write_bytes(b"model")
     frame_path = input_dir / "frame.jpg"
@@ -58,7 +82,7 @@ def test_site_report_collects_checks_and_restores_cwd(tmp_path: Path, monkeypatc
             ],
             "line_signal": {"enabled": True, "type": "virtual"},
             "plc": {"enabled": False},
-            "storage": {"log_dir": ".", "screenshot_dir": "."},
+            "storage": {"log_dir": "./logs", "screenshot_dir": "."},
         },
     )
     monkeypatch.chdir(tmp_path)
@@ -78,6 +102,8 @@ def test_site_report_collects_checks_and_restores_cwd(tmp_path: Path, monkeypatc
             "site_report.json",
             "--camera-samples-dir",
             "camera_samples",
+            "--log-tail-lines",
+            "2",
             "--json",
         ]
     )
@@ -90,6 +116,12 @@ def test_site_report_collects_checks_and_restores_cwd(tmp_path: Path, monkeypatc
     assert payload == json.loads(report_path.read_text(encoding="utf-8"))
     assert payload["status"] == "WARN"
     assert payload["diagnostics"]["status"] == "WARN"
+    assert payload["deployment"]["build_info"]["status"] == "OK"
+    assert payload["deployment"]["build_info"]["values"]["commit"] == "abc1234"
+    assert payload["deployment"]["manifest"]["status"] == "OK"
+    assert payload["deployment"]["manifest"]["item_count"] == 2
+    assert payload["deployment"]["runtime_log"]["status"] == "OK"
+    assert payload["deployment"]["runtime_log"]["tail_lines"] == ["line-4", "line-5"]
     assert payload["model_check"]["status"] == "OK"
     assert payload["line_signal"]["status"] == "OK"
     assert payload["mvs_devices"]["devices"][0]["serial_number"] == "ABC123"
@@ -348,3 +380,45 @@ def test_site_report_passes_seat_model_id_to_model_check(tmp_path: Path, monkeyp
     assert exit_code == 0
     assert seen == [("config.json", "MODEL_A", False)]
     assert payload["model_check"]["seat_model_id"] == "MODEL_A"
+
+
+def test_site_report_marks_missing_deployment_evidence(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "model.pt").write_bytes(b"model")
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "continuous"},
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "file_watcher",
+                    "enabled": True,
+                    "watch_dir": "./input/CAM_A",
+                    "efficientad_model_path": "./model.pt",
+                }
+            ],
+            "line_signal": {"enabled": True, "type": "virtual"},
+            "storage": {"log_dir": "./logs", "screenshot_dir": "."},
+        },
+    )
+    monkeypatch.setattr(mvs_list, "list_mvs_devices", lambda: [])
+    monkeypatch.setattr(mvs_list, "describe_mvs_sdk_candidates", lambda path: [str(path)])
+    monkeypatch.setattr("app.site_report.check_models", _ok_model_check)
+
+    exit_code = site_report_main(
+        [
+            "--config",
+            str(config_path),
+            "--output",
+            "site_report.json",
+            "--skip-camera-check",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["deployment"]["build_info"]["status"] == "MISSING"
+    assert payload["deployment"]["manifest"]["status"] == "MISSING"
+    assert payload["deployment"]["runtime_log"]["status"] == "MISSING"

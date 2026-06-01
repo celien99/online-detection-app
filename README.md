@@ -158,7 +158,7 @@ OnlineDetectionConfigWizard.exe --template config.production.example.json --outp
 
 部署目录也会生成可双击的批处理脚本：`00_create_production_config.bat`、`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_models.bat`、`03_check_line_signal.bat`、`04_send_plc_ng_test.bat`、`05_list_mvs_cameras.bat`、`06_check_camera_connections.bat`、`07_grab_camera_samples.bat`、`08_collect_site_report.bat`、`09_start_app.bat`。
 
-GUI 启动、后台线程异常和未捕获异常会写入 `logs\runtime.log`。现场排障时优先回传 `site_report.json`、`camera_samples\` 和 `logs\runtime.log`；`site_report.json` 中的 `model_check` 字段可直接判断测试电脑上的模型运行时和权重预热是否通过。
+GUI 启动、后台线程异常和未捕获异常会写入 `logs\runtime.log`。现场排障时优先回传 `site_report.json`、`camera_samples\` 和 `logs\runtime.log`；`site_report.json` 中的 `deployment` 字段会包含 `BUILD_INFO.txt`、`MANIFEST.json` 摘要和 runtime 日志尾部，`model_check` 字段可直接判断测试电脑上的模型运行时和权重预热是否通过。
 
 构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，写入 `BUILD_INFO.txt` 和 `MANIFEST.json`，压缩成 zip，并检查 GUI/诊断/配置向导/模型检查/相机检查/产线信号检查/MVS 枚举/现场报告 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
 
