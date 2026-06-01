@@ -7,6 +7,7 @@ import platform
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from app.infrastructure.config_store import ConfigStore
 
@@ -83,6 +84,37 @@ class ProductionDiagnostics:
                         suggestion="为相机配置 mvs://、rtsp:// 或 rtmp:// 输入源",
                     )
                 )
+            if cam.get("type") == "mvs":
+                items.extend(self._check_mvs_camera_source(camera_id, source))
+        return items
+
+    def _check_mvs_camera_source(self, camera_id: str, source: str) -> list[DiagnosticItem]:
+        app_cfg = self._config.get_app_config()
+        if app_cfg.get("inspection_mode", "continuous") != "triggered" or not source.startswith("mvs://"):
+            return []
+        parsed = urlparse(source)
+        query = parse_qs(parsed.query)
+        items: list[DiagnosticItem] = []
+        selector = (parsed.netloc or "").strip().lower()
+        if selector not in {"sn", "serial"} and "sn" not in query and "serial" not in query:
+            items.append(
+                DiagnosticItem(
+                    name=f"{camera_id} 相机选择",
+                    status="WARN",
+                    message="MVS 相机未使用序列号选择",
+                    suggestion="生产电脑建议使用 mvs://sn/<序列号>，避免设备枚举顺序变化导致误选",
+                )
+            )
+        trigger_mode = query.get("trigger", ["continuous"])[0].lower()
+        if trigger_mode != "hardware":
+            items.append(
+                DiagnosticItem(
+                    name=f"{camera_id} 触发模式",
+                    status="WARN",
+                    message=f"MVS 相机 trigger={trigger_mode}",
+                    suggestion="连接 PLC 到位信号时建议使用 trigger=hardware&trigger_source=Line0",
+                )
+            )
         return items
 
     def _check_mvs_sdk(self) -> DiagnosticItem:
