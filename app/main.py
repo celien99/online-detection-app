@@ -15,11 +15,9 @@ from PySide6.QtCore import QUrl, Qt, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-from app.infrastructure.camera.file_watcher import FileWatcherCamera
 from app.infrastructure.camera.interface import CameraInterface
 from app.infrastructure.camera.manager import CameraManager
-from app.infrastructure.camera.mvs_adapter import MvsCameraAdapter
-from app.infrastructure.camera.rtsp_adapter import RTSPCameraAdapter
+from app.infrastructure.camera.factory import create_camera
 from app.infrastructure.config_store import ConfigStore
 from app.infrastructure.image_provider import CameraImageProvider
 from app.infrastructure.line_signal import LabVIEWTcpLineSignalAdapter, ModbusLineSignalAdapter, VirtualLineSignalAdapter
@@ -45,23 +43,6 @@ from app.services.platform_sync_service import PlatformSyncService
 from app.viewmodels.seat_model_viewmodel import SeatModelViewModel
 from app.viewmodels.model_deploy_viewmodel import ModelDeployViewModel
 from app.runtime_paths import chdir_to_config_dir, resolve_config_path
-
-
-def _create_camera(camera_config: Dict[str, Any]) -> CameraInterface:
-    camera_id = camera_config["camera_id"]
-    source = camera_config.get("source", "")
-    cam_type = camera_config.get("type", "mvs")
-
-    if cam_type == "mvs" and source.startswith("mvs://"):
-        return MvsCameraAdapter(camera_id, source)
-    elif cam_type == "rtsp" and (source.startswith("rtsp://") or source.startswith("rtmp://")):
-        return RTSPCameraAdapter(camera_id, source)
-    elif cam_type == "file_watcher":
-        watch_dir = camera_config.get("watch_dir", f"./input/{camera_id}")
-        pattern = camera_config.get("pattern", "*.jpg")
-        return FileWatcherCamera(camera_id, watch_dir, pattern)
-    else:
-        raise ValueError(f"Unsupported camera type or source for {camera_id}: type={cam_type}, source={source}")
 
 
 def _create_plc(plc_config: Dict[str, Any]) -> PLCInterface:
@@ -226,7 +207,7 @@ def main(config_path: str | None = None) -> int:
     camera_ids = []
     for cam_config in config.get_camera_configs():
         try:
-            camera = _create_camera(cam_config)
+            camera = create_camera(cam_config)
             camera_manager.register(camera)
             camera_ids.append(camera.camera_id)
         except Exception as exc:

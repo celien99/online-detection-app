@@ -95,13 +95,48 @@ diagnostics_exe = EXE(
     entitlements_file=None,
 )
 
+camera_check = Analysis(
+    ["app/camera_check.py"],
+    pathex=[str(ROOT)],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+camera_check_pyz = PYZ(camera_check.pure)
+camera_check_exe = EXE(
+    camera_check_pyz,
+    camera_check.scripts,
+    [],
+    exclude_binaries=True,
+    name="OnlineDetectionCameraCheck",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
 coll = COLLECT(
     gui_exe,
     diagnostics_exe,
+    camera_check_exe,
     gui.binaries,
     gui.datas,
     diagnostics.binaries,
     diagnostics.datas,
+    camera_check.binaries,
+    camera_check.datas,
     strip=False,
     upx=True,
     upx_exclude=[],

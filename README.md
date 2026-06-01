@@ -138,10 +138,11 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 1. 编辑 `dist\OnlineDetectionApp\config.json`，填写相机序列号、PLC IP/端口/点表、模型和标定路径。
 2. 将模型放入 `models\`、`deployed_models\`、`deployed_rules\`、`calibration\` 等目录。
 3. 确认测试电脑已安装 Hikrobot MVS 运行环境，且相机能在 MVS 工具中正常取流。
-4. 先运行 `OnlineDetectionDiagnostics.exe --config config.json` 做现场自检。
-5. 运行 `OnlineDetectionApp.exe`。
+4. 先运行 `OnlineDetectionDiagnostics.exe --config config.json` 做配置、模型、系统环境自检。
+5. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1` 确认海康相机 SDK、相机选择和抓图链路。
+6. 运行 `OnlineDetectionApp.exe`。
 
-构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，并检查 GUI/诊断 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
+构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，并检查 GUI/诊断/相机检查 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1 -SkipTests

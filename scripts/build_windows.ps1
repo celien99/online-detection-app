@@ -42,6 +42,7 @@ foreach ($dir in @("models", "deployed_models", "deployed_rules", "calibration",
 $RequiredPaths = @(
     "OnlineDetectionApp.exe",
     "OnlineDetectionDiagnostics.exe",
+    "OnlineDetectionCameraCheck.exe",
     "config.json",
     "app/qml/main.qml",
     "app/resources/styles/theme.qml",
@@ -69,10 +70,14 @@ OnlineDetectionApp deployment
    - model, rule, and calibration paths
 2. Install Hikrobot MVS runtime on the test computer if the bundled DLL is not enough for the camera model.
 3. Put model files under models/, deployed_models/, deployed_rules/, and calibration/.
-4. Run OnlineDetectionApp.exe.
+4. Run OnlineDetectionCameraCheck.exe --config config.json --frames 1 before starting production.
+5. Run OnlineDetectionApp.exe.
 
 Run diagnostics before production:
    OnlineDetectionDiagnostics.exe --config config.json
+
+Check cameras:
+   OnlineDetectionCameraCheck.exe --config config.json --frames 1
 
 Main GUI:
    OnlineDetectionApp.exe
