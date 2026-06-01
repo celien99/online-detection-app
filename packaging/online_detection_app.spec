@@ -30,7 +30,7 @@ hiddenimports = [
     "seat_defect_core",
 ]
 
-a = Analysis(
+gui = Analysis(
     ["app/main.py"],
     pathex=[str(ROOT)],
     binaries=[],
@@ -43,11 +43,11 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
-pyz = PYZ(a.pure)
+gui_pyz = PYZ(gui.pure)
 
-exe = EXE(
-    pyz,
-    a.scripts,
+gui_exe = EXE(
+    gui_pyz,
+    gui.scripts,
     [],
     exclude_binaries=True,
     name="OnlineDetectionApp",
@@ -62,10 +62,46 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
+diagnostics = Analysis(
+    ["app/diagnostics.py"],
+    pathex=[str(ROOT)],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+diagnostics_pyz = PYZ(diagnostics.pure)
+diagnostics_exe = EXE(
+    diagnostics_pyz,
+    diagnostics.scripts,
+    [],
+    exclude_binaries=True,
+    name="OnlineDetectionDiagnostics",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
 coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
+    gui_exe,
+    diagnostics_exe,
+    gui.binaries,
+    gui.datas,
+    diagnostics.binaries,
+    diagnostics.datas,
     strip=False,
     upx=True,
     upx_exclude=[],

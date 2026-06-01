@@ -51,8 +51,10 @@ OnlineDetectionApp deployment
 4. Run OnlineDetectionApp.exe.
 
 Run diagnostics before production:
-   OnlineDetectionApp.exe is the GUI entry. For diagnostics, use the source checkout command:
-   uv run python -m app.diagnostics --config config.json
+   OnlineDetectionDiagnostics.exe --config config.json
+
+Main GUI:
+   OnlineDetectionApp.exe
 "@
 $Readme | Set-Content -Encoding UTF8 (Join-Path $DistRoot "DEPLOYMENT.txt")
 
