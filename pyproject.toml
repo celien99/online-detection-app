@@ -18,6 +18,9 @@ dev = [
     "pytest>=8.0.0",
     "pytest-qt>=4.4.0",
 ]
+packaging = [
+    "pyinstaller>=6.0.0",
+]
 
 [tool.ruff]
 target-version = "py311"

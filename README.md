@@ -103,6 +103,49 @@ uv run pytest                          # 全部测试
 uv run pytest tests/test_integration.py -v  # 单文件
 ```
 
+### 产线联机模式
+
+正式连接 PLC 和海康相机时，建议从生产模板开始：
+
+```bash
+cp config.production.example.json config.json
+uv run python -m app.diagnostics --config config.json
+uv run python -m app.main
+```
+
+关键配置：
+
+- `app.inspection_mode`: 生产联机使用 `triggered`，应用只在收到产线触发后检测一件产品。
+- `line_signal.enabled`: 生产联机设为 `true`。
+- `line_signal.type`: PLC Modbus TCP 使用 `modbus`。
+- `line_signal.*_coil` / `*_register`: 必须按现场 PLC 点表填写，并确认地址是 0-based 还是 1-based。
+- `cameras[].source`: 海康相机建议用序列号固定设备，例如 `mvs://sn/<SN>?trigger=hardware&trigger_source=Line0&trigger_activation=rising_edge`。
+
+当前握手流程为：PLC 拉高 `capture_request_coil` → 应用检测上升沿 → 应用脉冲 `capture_ack_coil` → 应用置位 `busy_coil` → 抓图检测 → 写入 `ok_coil` / `ng_coil` / `reject_coil` 和 `defect_code_register` → 脉冲 `done_coil` → 清除 busy。异常时写入 `fault_code_register` 并脉冲 `fault_coil`。
+
+如果现场需要沿用旧的单独缺陷/停线脉冲，可将 `plc.enabled=true` 且 `line_signal.also_send_legacy_plc_defect=true`。默认情况下，`triggered + line_signal` 会以 `line_signal` 结果握手为准，避免同一次 NG 重复写 PLC 点位。
+
+### Windows 打包
+
+测试电脑连接海康相机时，建议在 Windows 工控机或同等 Windows 环境打包：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
+```
+
+输出目录为 `dist\OnlineDetectionApp`。部署到测试电脑后：
+
+1. 编辑 `dist\OnlineDetectionApp\config.json`，填写相机序列号、PLC IP/端口/点表、模型和标定路径。
+2. 将模型放入 `models\`、`deployed_models\`、`deployed_rules\`、`calibration\` 等目录。
+3. 确认测试电脑已安装 Hikrobot MVS 运行环境，且相机能在 MVS 工具中正常取流。
+4. 运行 `OnlineDetectionApp.exe`。
+
+构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录。需要跳过测试时可使用：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1 -SkipTests
+```
+
 ## 架构设计
 
 本应用采用 **MVVM (Model-View-ViewModel)** 架构，通过 PySide6 的 Signal/Slot 机制解耦检测线程与 UI 渲染:
@@ -150,7 +193,8 @@ uv run pytest tests/test_integration.py -v  # 单文件
     "station_id": "seat_inspection",  // 工位 ID
     "language": "zh-CN",
     "fullscreen": true,
-    "grid_layout": "2x2"       // 相机网格布局，如 2x2 / 1x1 / 3x1
+    "grid_layout": "2x2",      // 相机网格布局，如 2x2 / 1x1 / 3x1
+    "inspection_mode": "triggered"
   },
   "cameras": [{
     "camera_id": "CAM_FRONT",
@@ -172,6 +216,20 @@ uv run pytest tests/test_integration.py -v  # 单文件
     "port": 502,
     "defect_coil": 100,
     "stop_coil": 101
+  },
+  "line_signal": {
+    "enabled": true,
+    "type": "modbus",
+    "host": "192.168.1.100",
+    "port": 502,
+    "capture_request_coil": 10,
+    "capture_ack_coil": 11,
+    "busy_coil": 12,
+    "done_coil": 13,
+    "ok_coil": 14,
+    "ng_coil": 15,
+    "reject_coil": 16,
+    "fault_coil": 17
   },
   "alert": {
     "ng_popup_timeout_seconds": 30,
