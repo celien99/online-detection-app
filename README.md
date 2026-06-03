@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB?style=flat-square&logo=python&logoColor=white" />
   <img src="https://img.shields.io/badge/PySide6-6.6+-41CD52?style=flat-square&logo=qt&logoColor=white" />
   <img src="https://img.shields.io/badge/QML-6.6+-41CD52?style=flat-square&logo=qt&logoColor=white" />
   <img src="https://img.shields.io/badge/OpenCV-4.8+-5C3EE8?style=flat-square&logo=opencv&logoColor=white" />
@@ -56,25 +56,62 @@ CameraFrame → YOLO Segmentation → ROI Crop/Align → EfficientAD (Texture An
 
 | 层级          | 技术                                |
 | ------------- | ----------------------------------- |
-| 运行时        | Python 3.11+                        |
+| 运行时        | Python 3.11 / 3.12                  |
 | UI 框架       | PySide6 (Qt 6.6+), QML              |
 | 计算机视觉    | OpenCV, NumPy                       |
 | ML 推理       | PyTorch (YOLO, EfficientAD)         |
 | 工业通信      | pymodbus (Modbus TCP)               |
 | 日志          | structlog + SQLite                  |
-| 包管理        | uv                                  |
+| 环境管理      | Windows: conda；其他系统: uv        |
 | 测试          | pytest, pytest-qt                   |
 
 ## 快速开始
 
 ### 环境要求
 
-- Python 3.11+
-- Windows 推荐 pip/venv 脚本；其他环境可使用 uv
+- Windows: Miniconda 或 Anaconda
+- Windows conda 环境内 Python 固定为 3.11 或 3.12
+- Linux/macOS 或开发环境可使用 uv
 - (可选) Hikrobot MVS SDK (如需连接海康工业相机)
 - (可选) CUDA 兼容 GPU (如需 GPU 推理)
 
-### 安装与运行
+### Windows 初始化（独立流程）
+
+Windows 统一由 conda 创建和管理 Python 虚拟环境，首次打开 PowerShell 后在项目根目录执行：
+
+```powershell
+# 1. 克隆仓库
+git clone <repo-url>
+cd online-detection-app
+
+# 2. 创建 conda 环境并安装开发依赖
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows_conda.ps1 -Dev
+```
+
+本地 GUI 演示，无相机、无 PLC、无模型权重：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_local_demo_windows_conda.ps1
+```
+
+真实产线或需要 ML 推理时，重新安装 ML 依赖：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows_conda.ps1 -Dev -Ml
+Copy-Item config.production.example.json config.json
+notepad config.json
+powershell -ExecutionPolicy Bypass -File scripts\start_windows_conda.ps1 -Config config.json
+```
+
+默认 conda 环境名为 `online-detection-app`。如需指定环境名或 Python 版本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows_conda.ps1 -EnvName online-detection-app -PythonVersion 3.12 -Dev -Ml
+```
+
+`config.local.example.json` 用于本地 GUI 验证；`config.production.example.json` 用于 Windows 产线联机、MVS 相机和 PLC。MVS 与 PLC 的完整验收命令见下方 “Windows 产线运行与 MVS 接入”。
+
+### 其他系统 / uv 初始化
 
 ```bash
 # 1. 克隆仓库
@@ -96,109 +133,118 @@ uv run python -m app.main
 SEAT_INSPECTION_CONFIG=/path/to/my_config.json uv run python -m app.main
 ```
 
-Windows 当前建议使用独立的 pip 虚拟环境启动，避免 uv 在本地路径依赖和部分旧包构建上的解析问题：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup_windows_pip.ps1 -Dev
-powershell -ExecutionPolicy Bypass -File scripts\run_local_demo_windows_pip.ps1
-
-# 使用真实产线配置时
-powershell -ExecutionPolicy Bypass -File scripts\start_windows_pip.ps1 -Config config.json
-```
-
-`config.local.example.json` 可用于无相机、无 PLC、无模型权重的本地 GUI 验证。真实 ML 推理环境需要额外安装运行时依赖：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup_windows_pip.ps1 -Dev -Ml
-```
-
 ### 运行测试
+
+Windows：
+
+```powershell
+conda run --no-capture-output -n online-detection-app python -m pytest
+conda run --no-capture-output -n online-detection-app python -m pytest tests/test_integration.py -v
+```
+
+其他系统 / uv：
 
 ```bash
 uv run pytest                          # 全部测试
 uv run pytest tests/test_integration.py -v  # 单文件
 ```
 
-### 产线联机模式
+### Windows 产线运行与 MVS 接入
 
-正式连接 PLC 和海康相机时，建议从生产模板开始：
+生产联机建议在 Windows 工控机上运行，并先确认 Hikrobot MVS 客户端能看到相机且可以正常取流。`OnlineDetectionDiagnostics.exe` 只能做基础配置检查，MVS 是否真正可用必须通过枚举、连接和取图命令验证。
 
-```bash
-cp config.production.example.json config.json
-uv run python -m app.diagnostics --config config.json
-uv run python -m app.main
-```
+#### 1. 生成并编辑生产配置
 
-关键配置：
-
-- `app.inspection_mode`: 生产联机使用 `triggered`，应用只在收到产线触发后检测一件产品。
-- `line_signal.enabled`: 生产联机设为 `true`。
-- `line_signal.type`: PLC Modbus TCP 使用 `modbus`。
-- `line_signal.*_coil` / `*_register`: 必须按现场 PLC 点表填写，并确认地址是 0-based 还是 1-based。
-- `cameras[].source`: 海康相机建议用序列号固定设备，例如 `mvs://sn/<SN>?trigger=hardware&trigger_source=Line0&trigger_activation=rising_edge`。
-
-当前握手流程为：PLC 拉高 `capture_request_coil` → 应用检测上升沿 → 应用脉冲 `capture_ack_coil` → 应用置位 `busy_coil` → 抓图检测 → 写入 `ok_coil` / `ng_coil` / `reject_coil` 和 `defect_code_register` → 脉冲 `done_coil` → 清除 busy。异常时写入 `fault_code_register` 并脉冲 `fault_coil`。
-
-如果现场需要沿用旧的单独缺陷/停线脉冲，可将 `plc.enabled=true` 且 `line_signal.also_send_legacy_plc_defect=true`。默认情况下，`triggered + line_signal` 会以 `line_signal` 结果握手为准，避免同一次 NG 重复写 PLC 点位。
-
-### MVS 相机现场验收步骤
-
-在搭载 Hikrobot MVS 相机的工控机或测试电脑上，按下面顺序确认相机绑定和控制链路。不要只看 `OnlineDetectionDiagnostics.exe` 的 MVS DLL 检查结果；它只能确认文件存在，不能替代 SDK 加载、设备枚举和真实取图验证。
-
-1. 先在 Hikrobot MVS 客户端中确认相机可见、IP/网卡配置正确，并且能正常取流。
-2. 运行 `uv run python -m app.mvs_list --json`，或打包后运行 `OnlineDetectionMvsList.exe --json`，确认 SDK 能枚举到目标相机，记录真实序列号和工具输出的 `mvs://sn/...` 建议配置。
-3. 将 `config.json` 中的 `cameras[].source` 改为序列号绑定，例如 `mvs://sn/<真实SN>?trigger=hardware&trigger_source=Line0&trigger_activation=rising_edge&timeout_ms=2000&exposure_time=6000&gain=8&pixel_format=bgr8`。多相机时每个 `camera_id` 必须绑定对应的真实 SN，避免使用 `mvs://0` 这类枚举顺序绑定。
-4. 运行 `uv run python -m app.camera_check --config config.json --connect-only --json`，或打包后运行 `OnlineDetectionCameraCheck.exe --config config.json --connect-only --json`，确认 SDK、相机选择和参数下发成功。硬触发模式下这一步不要求 PLC 给触发脉冲。
-5. 配合 PLC 或触发线给一次到位/采图脉冲，运行 `uv run python -m app.camera_check --config config.json --frames 1 --save-dir camera_samples`，或打包后运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples`，确认可以取到图并保存现场样图。
-6. 运行 `uv run python -m app.site_report --config config.json --output site_report.json --camera-samples-dir camera_samples`，或打包后运行 `OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples`，汇总配置诊断、模型检查、PLC/产线信号、MVS 枚举、相机连接和样图信息。
-7. 只有当 MVS 枚举、`--connect-only`、触发取图和 `site_report.json` 都通过后，再启动 `uv run python -m app.main` 或 `OnlineDetectionApp.exe` 做联机试运行。
-
-### Windows 打包
-
-测试电脑连接海康相机时，建议在 Windows 工控机或同等 Windows 环境打包：
+源码运行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
+Copy-Item config.production.example.json config.json
+notepad config.json
 ```
 
-输出目录为 `dist\OnlineDetectionApp`，同时生成 `dist\OnlineDetectionApp-<version>-<commit>.zip`。部署到测试电脑后：
-
-1. 编辑 `dist\OnlineDetectionApp\config.json`，填写相机序列号、PLC IP/端口/点表、模型和标定路径。
-2. 将模型放入 `models\`、`deployed_models\`、`deployed_rules\`、`calibration\` 等目录。
-3. 确认测试电脑已安装 Hikrobot MVS 运行环境，且相机能在 MVS 工具中正常取流。
-4. 先运行 `OnlineDetectionDiagnostics.exe --config config.json` 做配置、模型、系统环境自检。
-5. 再运行 `OnlineDetectionModelCheck.exe --config config.json` 做 PyTorch/Ultralytics/Anomalib 导入和模型预热检查；多座椅型号可加 `--seat-model-id <型号ID>`。
-6. 再运行 `OnlineDetectionLineCheck.exe --config config.json` 确认 PLC/产线信号连接；如需等待一次到位触发，运行 `OnlineDetectionLineCheck.exe --config config.json --wait-trigger --timeout-s 10`。
-7. 与 PLC 工程师确认结果点位时，运行 `OnlineDetectionLineCheck.exe --config config.json --send-test-result NG --defect-code 9001`，观察 `ng_coil`、`done_coil` 和 `defect_code_register`。
-8. 如需确认相机序列号，运行 `OnlineDetectionMvsList.exe` 查看海康 SDK 可见设备和建议的 `mvs://sn/...` 配置。
-9. 先运行 `OnlineDetectionCameraCheck.exe --config config.json --connect-only` 确认海康相机 SDK、相机选择和参数下发；硬触发相机无 PLC 脉冲时不会强制要求取到图。
-10. 再运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples`，配合 PLC 触发脉冲确认抓图链路并保存现场样图。
-11. 现场排障或回传信息时，运行 `OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples --camera-connect-only`，它会聚合配置诊断、模型自检、PLC/产线信号、MVS 枚举和相机连接结果；如需跳过模型预热可加 `--skip-model-check`。
-12. 运行 `OnlineDetectionApp.exe`。
-
-如果测试电脑第一次配置，可用向导从生产模板生成配置：
+打包部署后可用向导生成：
 
 ```powershell
 OnlineDetectionConfigWizard.exe --template config.production.example.json --output config.json --camera-sn <相机序列号> --plc-host <PLC IP> --force
 ```
 
-多相机时重复传入 `--camera-sn` 和 `--camera-id`；PLC 点位可用 `--point ok_coil=14 --point ng_coil=15` 覆盖。
+必须确认这些配置：
 
-部署目录也会生成可双击的批处理脚本：`00_create_production_config.bat`、`00_verify_deployment.bat`、`01_run_diagnostics.bat`、`02_check_models.bat`、`03_check_line_signal.bat`、`04_send_plc_ng_test.bat`、`05_list_mvs_cameras.bat`、`06_check_camera_connections.bat`、`07_grab_camera_samples.bat`、`08_collect_site_report.bat`、`09_start_app.bat`。
+- `app.inspection_mode` 为 `triggered`。
+- `line_signal.enabled=true`，`line_signal.type=modbus`，PLC 点位按现场点表填写。
+- `cameras[].source` 使用序列号绑定，例如 `mvs://sn/<SN>?trigger=hardware&trigger_source=Line0&trigger_activation=rising_edge&timeout_ms=2000&exposure_time=6000&gain=8&pixel_format=bgr8`。
+- 多相机时，每个 `camera_id` 对应一个真实 SN；不要在生产环境依赖 `mvs://0` 这类枚举顺序。
+- 模型、规则、标定文件放到 `models\`、`deployed_models\`、`deployed_rules\`、`calibration\` 等配置指向的目录。
 
-GUI 启动、后台线程异常和未捕获异常会写入 `logs\runtime.log`。现场排障时优先回传 `site_report.json`、`camera_samples\` 和 `logs\runtime.log`；`site_report.json` 中的 `deployment` 字段会包含 `BUILD_INFO.txt`、`MANIFEST.json` 摘要和 runtime 日志尾部，`model_check` 字段可直接判断测试电脑上的模型运行时和权重预热是否通过。
+#### 2. 安装或打包
 
-构建脚本会先安装依赖、运行测试、执行生产诊断，再调用 PyInstaller 生成可分发目录，写入 `BUILD_INFO.txt` 和 `MANIFEST.json`，压缩成 zip，并检查 GUI/诊断/配置向导/模型检查/相机检查/产线信号检查/MVS 枚举/现场报告 exe、QML、MVS DLL、配置文件和部署目录是否齐全。需要跳过测试时可使用：
+源码运行使用 Windows conda 环境：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1 -SkipTests
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows_conda.ps1 -Dev -Ml
 ```
 
-如需单独校验已有部署目录：
+生成可分发目录：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
+```
+
+输出目录为 `dist\OnlineDetectionApp`。需要跳过测试时使用 `-SkipTests`，校验已有部署目录时运行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\verify_deployment.ps1 -DistRoot dist\OnlineDetectionApp
 ```
+
+#### 3. 按顺序验收
+
+源码运行命令：
+
+```powershell
+conda run --no-capture-output -n online-detection-app python -m app.diagnostics --config config.json
+conda run --no-capture-output -n online-detection-app python -m app.model_check --config config.json
+conda run --no-capture-output -n online-detection-app python -m app.line_check --config config.json
+conda run --no-capture-output -n online-detection-app python -m app.mvs_list --json
+conda run --no-capture-output -n online-detection-app python -m app.camera_check --config config.json --connect-only --json
+conda run --no-capture-output -n online-detection-app python -m app.camera_check --config config.json --frames 1 --save-dir camera_samples
+conda run --no-capture-output -n online-detection-app python -m app.site_report --config config.json --output site_report.json --camera-samples-dir camera_samples
+```
+
+打包后在 `dist\OnlineDetectionApp` 中运行：
+
+```powershell
+OnlineDetectionDiagnostics.exe --config config.json
+OnlineDetectionModelCheck.exe --config config.json
+OnlineDetectionLineCheck.exe --config config.json
+OnlineDetectionMvsList.exe --json
+OnlineDetectionCameraCheck.exe --config config.json --connect-only --json
+OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples
+OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples
+```
+
+说明：
+
+- `MvsList` 输出真实序列号和建议的 `mvs://sn/...`，用于修正 `cameras[].source`。
+- `CameraCheck --connect-only` 验证 SDK 加载、相机绑定和参数下发；硬触发模式下不要求 PLC 脉冲。
+- `CameraCheck --frames 1` 需要配合 PLC 或触发线给一次采图脉冲，用于确认真实取图。
+- `LineCheck --wait-trigger --timeout-s 10` 可用于等待一次产线触发；`LineCheck --send-test-result NG --defect-code 9001` 可用于和 PLC 工程师核对结果点位。
+- 现场排障优先回传 `site_report.json`、`camera_samples\` 和 `logs\runtime.log`。
+
+#### 4. 启动应用
+
+源码运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start_windows_conda.ps1 -Config config.json
+```
+
+打包后运行：
+
+```powershell
+OnlineDetectionApp.exe
+```
+
+当前握手流程为：PLC 拉高 `capture_request_coil` → 应用脉冲 `capture_ack_coil` → 置位 `busy_coil` → 抓图检测 → 写入 `ok_coil` / `ng_coil` / `reject_coil` 和 `defect_code_register` → 脉冲 `done_coil` → 清除 busy。异常时写入 `fault_code_register` 并脉冲 `fault_coil`。如需沿用旧的单独缺陷/停线脉冲，可设置 `plc.enabled=true` 且 `line_signal.also_send_legacy_plc_defect=true`。
 
 ## 架构设计
 
@@ -383,7 +429,8 @@ online-detection-app/
 
 欢迎提交 Issue 和 Pull Request。在提交 PR 前请确保:
 
-- 通过全部测试: `uv run pytest`
+- Windows 通过全部测试: `conda run --no-capture-output -n online-detection-app python -m pytest`
+- 其他系统通过全部测试: `uv run pytest`
 - 通过 lint 检查: `uv run ruff check .`
 - 测试覆盖新功能或修复
 

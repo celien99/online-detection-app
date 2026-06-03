@@ -1,36 +1,48 @@
 param(
     [string]$ConfigTemplate = "config.production.example.json",
+    [string]$EnvName = "online-detection-app",
+    [string]$PythonVersion = "3.12",
+    [string]$Conda = "conda",
     [switch]$SkipTests,
     [switch]$SkipDiagnostics,
     [switch]$SkipArchive,
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$RecreateEnv
 )
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
+. "$PSScriptRoot\common_windows.ps1"
 
 if ($Clean) {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
 }
 
-if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
-    throw "uv is required. Install uv first, then rerun this script."
-}
+$script:CondaCommand = Resolve-CondaCommand $Conda
 
-uv sync --extra dev --extra packaging
+& "$PSScriptRoot\setup_windows_conda.ps1" `
+    -EnvName $EnvName `
+    -PythonVersion $PythonVersion `
+    -Conda $script:CondaCommand `
+    -Dev `
+    -Ml `
+    -Packaging `
+    -Recreate:$RecreateEnv
 
 if (-not $SkipTests) {
-    uv run pytest
+    Invoke-CondaRun -CondaCommand $script:CondaCommand -EnvName $EnvName -Arguments @("python", "-m", "pytest")
 }
 
 if (-not $SkipDiagnostics) {
-    uv run python -m app.diagnostics --config $ConfigTemplate
-    if ($LASTEXITCODE -ne 0) {
+    try {
+        Invoke-CondaRun -CondaCommand $script:CondaCommand -EnvName $EnvName -Arguments @("python", "-m", "app.diagnostics", "--config", $ConfigTemplate)
+    }
+    catch {
         Write-Warning "Production diagnostics reported missing site assets or configuration issues. Packaging will continue; run diagnostics again on the test computer after editing config.json."
     }
 }
-uv run pyinstaller --noconfirm packaging/online_detection_app.spec
+Invoke-CondaRun -CondaCommand $script:CondaCommand -EnvName $EnvName -Arguments @("pyinstaller", "--noconfirm", "packaging/online_detection_app.spec")
 
 $DistRoot = Join-Path $RepoRoot "dist/OnlineDetectionApp"
 $ConfigTarget = Join-Path $DistRoot "config.json"
@@ -40,35 +52,10 @@ foreach ($dir in @("models", "deployed_models", "deployed_rules", "calibration",
     New-Item -ItemType Directory -Force -Path (Join-Path $DistRoot $dir) | Out-Null
 }
 
-$RequiredPaths = @(
-    "OnlineDetectionApp.exe",
-    "OnlineDetectionDiagnostics.exe",
-    "OnlineDetectionConfigWizard.exe",
-    "OnlineDetectionCameraCheck.exe",
-    "OnlineDetectionModelCheck.exe",
-    "OnlineDetectionLineCheck.exe",
-    "OnlineDetectionMvsList.exe",
-    "OnlineDetectionSiteReport.exe",
-    "config.json",
-    "config.production.example.json",
-    "app/qml/main.qml",
-    "app/resources/styles/theme.qml",
-    "app/infrastructure/camera/mvs/MvCameraControl.dll",
-    "models",
-    "deployed_models",
-    "deployed_rules",
-    "calibration",
-    "logs",
-    "screenshots"
-)
-foreach ($relativePath in $RequiredPaths) {
-    $fullPath = Join-Path $DistRoot $relativePath
-    if (-not (Test-Path $fullPath)) {
-        throw "Packaged output is missing required path: $relativePath"
-    }
-}
+$RequiredPaths = Get-DeploymentRequiredPaths
+Test-DeploymentPaths -DistRoot $DistRoot -Paths $RequiredPaths -MessagePrefix "Packaged output is missing required path"
 
-$Version = (uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])").Trim()
+$Version = (& $script:CondaCommand "run" "--no-capture-output" "-n" $EnvName "python" "-c" "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])").Trim()
 $Commit = (git rev-parse --short HEAD).Trim()
 $BuiltAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $BuildInfo = @"
@@ -81,60 +68,7 @@ config_template=$ConfigTemplate
 $BuildInfo | Set-Content -Encoding UTF8 (Join-Path $DistRoot "BUILD_INFO.txt")
 
 $BatchFiles = @{
-    "00_verify_deployment.bat" = @"
-@echo off
-setlocal
-cd /d "%~dp0"
-if not exist "OnlineDetectionApp.exe" (
-  echo Missing OnlineDetectionApp.exe
-  exit /b 1
-)
-if not exist "OnlineDetectionDiagnostics.exe" (
-  echo Missing OnlineDetectionDiagnostics.exe
-  exit /b 1
-)
-if not exist "OnlineDetectionConfigWizard.exe" (
-  echo Missing OnlineDetectionConfigWizard.exe
-  exit /b 1
-)
-if not exist "OnlineDetectionCameraCheck.exe" (
-  echo Missing OnlineDetectionCameraCheck.exe
-  exit /b 1
-)
-if not exist "OnlineDetectionModelCheck.exe" (
-  echo Missing OnlineDetectionModelCheck.exe
-  exit /b 1
-)
-if not exist "OnlineDetectionLineCheck.exe" (
-  echo Missing OnlineDetectionLineCheck.exe
-  exit /b 1
-)
-if not exist "OnlineDetectionMvsList.exe" (
-  echo Missing OnlineDetectionMvsList.exe
-  exit /b 1
-)
-if not exist "OnlineDetectionSiteReport.exe" (
-  echo Missing OnlineDetectionSiteReport.exe
-  exit /b 1
-)
-if not exist "config.json" (
-  echo Missing config.json
-  exit /b 1
-)
-if not exist "config.production.example.json" (
-  echo Missing config.production.example.json
-  exit /b 1
-)
-if not exist "app\qml\main.qml" (
-  echo Missing app\qml\main.qml
-  exit /b 1
-)
-if not exist "app\infrastructure\camera\mvs\MvCameraControl.dll" (
-  echo Missing MvCameraControl.dll
-  exit /b 1
-)
-echo Deployment file check passed.
-"@
+    "00_verify_deployment.bat" = New-DeploymentVerificationBatchContent -Paths (Get-DeploymentVerificationPaths)
     "00_create_production_config.bat" = @"
 @echo off
 setlocal
@@ -264,21 +198,7 @@ Runtime log:
 "@
 $Readme | Set-Content -Encoding UTF8 (Join-Path $DistRoot "DEPLOYMENT.txt")
 
-$GeneratedFiles = @(
-    "BUILD_INFO.txt",
-    "DEPLOYMENT.txt",
-    "00_create_production_config.bat",
-    "00_verify_deployment.bat",
-    "01_run_diagnostics.bat",
-    "02_check_models.bat",
-    "03_check_line_signal.bat",
-    "04_send_plc_ng_test.bat",
-    "05_list_mvs_cameras.bat",
-    "06_check_camera_connections.bat",
-    "07_grab_camera_samples.bat",
-    "08_collect_site_report.bat",
-    "09_start_app.bat"
-)
+$GeneratedFiles = Get-DeploymentGeneratedPaths
 $ManifestItems = foreach ($relativePath in $RequiredPaths + $GeneratedFiles) {
     $fullPath = Join-Path $DistRoot $relativePath
     [pscustomobject]@{
