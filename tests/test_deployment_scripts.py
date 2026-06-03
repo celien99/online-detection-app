@@ -44,3 +44,15 @@ def test_deployment_includes_model_check_executable_and_batch() -> None:
     assert '"02_check_models.bat"' in verify_script
     assert '"02_check_models.bat"' in build_script
     assert "OnlineDetectionModelCheck.exe --config config.json" in build_script
+
+def test_windows_pip_scripts_exist_and_use_local_venv() -> None:
+    setup_script = (ROOT / "scripts" / "setup_windows_pip.ps1").read_text(encoding="utf-8")
+    start_script = (ROOT / "scripts" / "start_windows_pip.ps1").read_text(encoding="utf-8")
+
+    assert "function Resolve-Python" in setup_script
+    assert "Python 3.11 or 3.12 not found" in setup_script
+    assert '$VenvPython = Join-Path $Venv "Scripts\\python.exe"' in setup_script
+    assert '$VenvPython = Join-Path $Venv "Scripts\\python.exe"' in start_script
+    assert '"-m", "app.main", "--config", $Config' in start_script
+    assert '[string[]]$ExtraArgs = @()' in start_script
+    assert "pip install -e" in setup_script

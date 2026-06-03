@@ -1,4 +1,8 @@
 .venv/
+.venv-pip/
+.venv312/
+.uv-cache/
+.uv-python/
 __pycache__/
 *.pyc
 *.pyo

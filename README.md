@@ -70,7 +70,7 @@ CameraFrame → YOLO Segmentation → ROI Crop/Align → EfficientAD (Texture An
 ### 环境要求
 
 - Python 3.11+
-- uv (推荐) 或 pip
+- Windows 推荐 pip/venv 脚本；其他环境可使用 uv
 - (可选) Hikrobot MVS SDK (如需连接海康工业相机)
 - (可选) CUDA 兼容 GPU (如需 GPU 推理)
 
@@ -94,6 +94,22 @@ uv run python -m app.main
 
 ```bash
 SEAT_INSPECTION_CONFIG=/path/to/my_config.json uv run python -m app.main
+```
+
+Windows 当前建议使用独立的 pip 虚拟环境启动，避免 uv 在本地路径依赖和部分旧包构建上的解析问题：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows_pip.ps1 -Dev
+powershell -ExecutionPolicy Bypass -File scripts\run_local_demo_windows_pip.ps1
+
+# 使用真实产线配置时
+powershell -ExecutionPolicy Bypass -File scripts\start_windows_pip.ps1 -Config config.json
+```
+
+`config.local.example.json` 可用于无相机、无 PLC、无模型权重的本地 GUI 验证。真实 ML 推理环境需要额外安装运行时依赖：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows_pip.ps1 -Dev -Ml
 ```
 
 ### 运行测试
