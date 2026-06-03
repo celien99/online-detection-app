@@ -152,10 +152,8 @@ class ProductionDiagnostics:
         for cam in self._config.get_camera_configs():
             camera_id = cam.get("camera_id", "<unknown>")
             checks = [
-                ("EfficientAD 模型", cam.get("efficientad_model_path")),
+                ("PatchCore 模型", cam.get("patchcore_model_path")),
                 ("规则文件", cam.get("rule_engine", {}).get("deployed_rules_path") if cam.get("rule_engine", {}).get("enabled") else None),
-                ("标定 normalizer", cam.get("calibration", {}).get("normalizer_path")),
-                ("标定 projector", cam.get("calibration", {}).get("projector_path")),
             ]
             if cam.get("filter_classifier", {}).get("enabled"):
                 checks.append(("过滤分类器", cam.get("filter_classifier", {}).get("model_path")))
@@ -168,7 +166,7 @@ class ProductionDiagnostics:
                             name=f"{camera_id} {label}",
                             status="FAIL",
                             message=f"路径仍包含模板占位符: {raw_path}",
-                            suggestion="替换为测试电脑上的真实模型、规则或标定文件路径",
+                            suggestion="替换为测试电脑上的真实模型或规则文件路径",
                         )
                     )
                     continue
@@ -181,7 +179,7 @@ class ProductionDiagnostics:
                             name=f"{camera_id} {label}",
                             status="FAIL",
                             message=f"路径不存在: {path}",
-                            suggestion="部署对应模型、规则或标定文件后再启动生产检测",
+                            suggestion="部署对应模型或规则文件后再启动生产检测",
                         )
                     )
         if not items:
@@ -189,8 +187,8 @@ class ProductionDiagnostics:
                 DiagnosticItem(
                     name="模型文件",
                     status="WARN",
-                    message="未发现模型、规则或标定文件配置",
-                    suggestion="确认 config.json 中每个相机的模型与标定路径",
+                    message="未发现模型或规则文件配置",
+                    suggestion="确认 config.json 中每个相机的 PatchCore、YOLO、Filter 与规则路径",
                 )
             )
         return items

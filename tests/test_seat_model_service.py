@@ -55,13 +55,13 @@ def test_add_camera_to_model(tmp_path: Path):
     svc.create_model("m1", "A")
     svc.add_camera("m1", {
         "camera_id": "cam1", "type": "rtsp", "source": "rtsp://10.0.0.1",
-        "efficientad_model_path": "./models/cam1.pt",
+        "patchcore_model_path": "./models/cam1.pt",
     })
     cameras = svc.get_cameras("m1")
     assert len(cameras) == 1
     assert cameras[0]["camera_id"] == "cam1"
     assert cameras[0]["type"] == "rtsp"
-    assert cameras[0]["efficientad_model_path"] == "./models/cam1.pt"
+    assert cameras[0]["patchcore_model_path"] == "./models/cam1.pt"
 
 
 def test_get_cameras_as_config_list(tmp_path: Path):
@@ -70,7 +70,6 @@ def test_get_cameras_as_config_list(tmp_path: Path):
     svc.add_camera("m1", {
         "camera_id": "cam1", "type": "mvs", "source": "mvs://1",
         "filter_classifier_path": "./fc/", "filter_classifier_enabled": True,
-        "calibration_normalizer": "./cal/norm.json", "calibration_projector": "./cal/proj.pt",
     })
     configs = svc.get_cameras_as_config_list("m1")
     assert len(configs) == 1
@@ -78,8 +77,6 @@ def test_get_cameras_as_config_list(tmp_path: Path):
     assert cfg["camera_id"] == "cam1"
     assert cfg["filter_classifier"]["enabled"] is True
     assert cfg["filter_classifier"]["model_path"] == "./fc/"
-    assert cfg["calibration"]["normalizer_path"] == "./cal/norm.json"
-    assert cfg["calibration"]["projector_path"] == "./cal/proj.pt"
 
 
 def test_remove_camera(tmp_path: Path):
@@ -94,7 +91,7 @@ def test_update_camera(tmp_path: Path):
     svc = _setup(tmp_path)
     svc.create_model("m1", "A")
     svc.add_camera("m1", {"camera_id": "cam1", "type": "mvs", "source": "mvs://1"})
-    svc.update_camera("cam1", efficientad_model_path="./models/new.pt", enabled=False)
+    svc.update_camera("cam1", patchcore_model_path="./models/new.pt", enabled=False)
     cam = svc.get_cameras("m1")[0]
-    assert cam["efficientad_model_path"] == "./models/new.pt"
+    assert cam["patchcore_model_path"] == "./models/new.pt"
     assert cam["enabled"] == 0

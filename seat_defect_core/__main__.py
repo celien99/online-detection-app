@@ -2,8 +2,7 @@
 
 Usage examples:
   python -m seat_defect_core inspect --config config.json --images cam1=img1.jpg
-  python -m seat_defect_core train-efficientad --config config.json --camera-id cam_front --good-images ./good/ --output model.pt
-  python -m seat_defect_core batch-train --config config.json --good-images-root ./training_data/ --output-root ./models/
+  python -m seat_defect_core train-patchcore --config config.json --camera-id cam_front --good-images ./good/ --output model.npz
 """
 
 from __future__ import annotations
@@ -26,29 +25,29 @@ def main(argv: Optional[List[str]] = None) -> int:
     inspect_parser = subparsers.add_parser("inspect", help="执行检测")
     _add_inspect_args(inspect_parser)
 
-    # train-efficientad 子命令
-    train_parser = subparsers.add_parser("train-efficientad", help="训练 EfficientAD 模型")
+    # train-patchcore 子命令
+    train_parser = subparsers.add_parser("train-patchcore", help="训练 PatchCore 模型")
     train_parser.add_argument("--config", type=str, required=True, help="检测配置文件路径 (JSON/INI)")
     train_parser.add_argument("--camera-id", type=str, required=True, help="目标相机 ID")
     train_parser.add_argument("--good-images", type=str, required=True, help="正常参考图像目录")
-    train_parser.add_argument("--output", type=str, required=True, help="输出 .pt 文件路径")
-
-    # batch-train 子命令
-    batch_parser = subparsers.add_parser("batch-train", help="批量训练多机位 EfficientAD 模型")
-    batch_parser.add_argument("--config", type=str, required=True, help="检测配置文件路径 (JSON)")
-    batch_parser.add_argument("--good-images-root", type=str, required=True, help="正常图像根目录")
-    batch_parser.add_argument("--output-root", type=str, required=True, help="模型输出根目录")
-    batch_parser.add_argument("--cameras", type=str, default=None, help="限定训练机位，逗号分隔")
-    batch_parser.add_argument("--mlflow-uri", type=str, default=None, help="MLflow tracking URI")
-    batch_parser.add_argument("--dry-run", action="store_true", help="只打印训练计划")
+    train_parser.add_argument("--output", type=str, required=True, help="输出 .npz 文件路径")
+    train_parser.add_argument(
+        "--input-mode",
+        choices=("roi", "online"),
+        default="roi",
+        help="训练样本输入模式：roi=已裁标准ROI，online=复用线上YOLO/ROI/mask流程",
+    )
+    train_parser.add_argument(
+        "--region-id",
+        type=str,
+        default=None,
+        help="online 模式下训练指定局部区域，如 upper/middle/lower",
+    )
 
     args = parser.parse_args(argv)
 
-    if args.command == "train-efficientad":
-        return _run_train_efficientad(args)
-
-    if args.command == "batch-train":
-        return _run_batch_train(args)
+    if args.command == "train-patchcore":
+        return _run_train_patchcore(args)
 
     # 默认：inspect（兼容旧的 --config --images 直接调用方式）
     if args.command is None:
@@ -140,7 +139,7 @@ def _run_inspect_legacy(argv: Optional[List[str]]) -> int:
     return _run_inspect(args)
 
 
-def _run_train_efficientad(args) -> int:
+def _run_train_patchcore(args) -> int:
     img_dir = Path(args.good_images)
     if not img_dir.is_dir():
         print(f"错误：图像目录不存在: {args.good_images}", file=sys.stderr)
@@ -154,40 +153,19 @@ def _run_train_efficientad(args) -> int:
         return 1
 
     try:
-        from seat_defect_core.training.efficientad import train_efficientad
-        result = train_efficientad(
+        from seat_defect_core.training.patchcore import train_patchcore
+        result = train_patchcore(
             config=args.config,
             camera_id=args.camera_id,
             good_image_paths=image_paths,
             output_path=args.output,
+            input_mode=args.input_mode,
+            region_id=args.region_id,
         )
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0 if result.get("status") == "completed" else 1
+        return 0
     except Exception as exc:
         print(f"训练失败：{exc}", file=sys.stderr)
-        return 1
-
-
-def _run_batch_train(args) -> int:
-    try:
-        from seat_defect_core.training.batch_train import batch_train_all
-
-        cameras_list: Optional[list[str]] = None
-        if args.cameras:
-            cameras_list = [c.strip() for c in args.cameras.split(",") if c.strip()]
-
-        result = batch_train_all(
-            config_path=args.config,
-            good_images_root=args.good_images_root,
-            output_root=args.output_root,
-            cameras=cameras_list,
-            mlflow_tracking_uri=args.mlflow_uri,
-            dry_run=args.dry_run,
-        )
-        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
-        return 0 if result.get("status") in ("completed", "dry_run") else 1
-    except Exception as exc:
-        print(f"批量训练失败：{exc}", file=sys.stderr)
         return 1
 
 

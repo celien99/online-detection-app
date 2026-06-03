@@ -21,9 +21,9 @@ def test_import_file(tmp_path: Path):
     src = base / "source.pt"
     src.write_bytes(b"fake model content")
 
-    mf = svc.import_file("cam1", "efficientad", str(src))
+    mf = svc.import_file("cam1", "patchcore", str(src))
     assert mf["camera_id"] == "cam1"
-    assert mf["model_type"] == "efficientad"
+    assert mf["model_type"] == "patchcore"
     assert mf["source"] == "local_upload"
     assert mf["is_active"] == 1
     assert mf["file_name"] == "source.pt"
@@ -46,7 +46,7 @@ def test_verify_checksum_pass(tmp_path: Path):
     svc, base = _setup(tmp_path)
     src = base / "model.pt"
     src.write_bytes(b"test")
-    mf = svc.import_file("cam1", "efficientad", str(src))
+    mf = svc.import_file("cam1", "patchcore", str(src))
     assert svc.verify_checksum(mf["id"]) is True
 
 
@@ -54,7 +54,7 @@ def test_verify_checksum_fail_on_tampered_file(tmp_path: Path):
     svc, base = _setup(tmp_path)
     src = base / "model.pt"
     src.write_bytes(b"original")
-    mf = svc.import_file("cam1", "efficientad", str(src))
+    mf = svc.import_file("cam1", "patchcore", str(src))
     Path(mf["file_path"]).write_bytes(b"tampered")
     assert svc.verify_checksum(mf["id"]) is False
 
@@ -66,11 +66,11 @@ def test_activate_deactivates_others(tmp_path: Path):
     src2 = base / "v2.pt"
     src2.write_bytes(b"v2")
 
-    mf1 = svc.import_file("cam1", "efficientad", str(src1))
-    mf2 = svc.import_file("cam1", "efficientad", str(src2))
+    mf1 = svc.import_file("cam1", "patchcore", str(src1))
+    mf2 = svc.import_file("cam1", "patchcore", str(src2))
 
     svc.activate(mf1["id"])
-    history = svc.list_history("cam1", "efficientad")
+    history = svc.list_history("cam1", "patchcore")
     active = [m for m in history if m["is_active"] == 1]
     assert len(active) == 1
     assert active[0]["id"] == mf1["id"]
@@ -83,14 +83,14 @@ def test_rollback_to_previous(tmp_path: Path):
     src2 = base / "v2.pt"
     src2.write_bytes(b"v2")
 
-    mf1 = svc.import_file("cam1", "efficientad", str(src1))
-    mf2 = svc.import_file("cam1", "efficientad", str(src2))
+    mf1 = svc.import_file("cam1", "patchcore", str(src1))
+    mf2 = svc.import_file("cam1", "patchcore", str(src2))
 
-    rolled = svc.rollback("cam1", "efficientad")
+    rolled = svc.rollback("cam1", "patchcore")
     assert rolled is not None
     assert rolled["id"] == mf1["id"]
 
-    history = svc.list_history("cam1", "efficientad")
+    history = svc.list_history("cam1", "patchcore")
     active = [m for m in history if m["is_active"] == 1]
     assert len(active) == 1
     assert active[0]["id"] == mf1["id"]
@@ -100,8 +100,8 @@ def test_get_active(tmp_path: Path):
     svc, base = _setup(tmp_path)
     src = base / "model.pt"
     src.write_bytes(b"test")
-    svc.import_file("cam1", "efficientad", str(src))
-    active = svc.get_active("cam1", "efficientad")
+    svc.import_file("cam1", "patchcore", str(src))
+    active = svc.get_active("cam1", "patchcore")
     assert active is not None
     assert active["camera_id"] == "cam1"
 
@@ -113,9 +113,9 @@ def test_delete_non_active(tmp_path: Path):
     src2 = base / "v2.pt"
     src2.write_bytes(b"v2")
 
-    mf1 = svc.import_file("cam1", "efficientad", str(src1))
-    mf2 = svc.import_file("cam1", "efficientad", str(src2))
+    mf1 = svc.import_file("cam1", "patchcore", str(src1))
+    mf2 = svc.import_file("cam1", "patchcore", str(src2))
     svc.activate(mf1["id"])
     svc.delete_file(mf2["id"])
-    history = svc.list_history("cam1", "efficientad")
+    history = svc.list_history("cam1", "patchcore")
     assert len(history) == 1

@@ -25,10 +25,10 @@ def test_pyinstaller_spec_includes_runtime_hidden_imports() -> None:
     for module_name in [
         "torch",
         "ultralytics",
-        "anomalib.models.image.efficient_ad.torch_model",
+        "faiss",
         "seat_defect_core.api",
         "seat_defect_core.yolo.detection",
-        "seat_defect_core.efficientad.engine",
+        "seat_defect_core.patchcore.engine",
         "seat_defect_core.classifier.engine",
     ]:
         assert f'"{module_name}"' in spec

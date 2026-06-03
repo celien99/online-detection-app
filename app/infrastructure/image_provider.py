@@ -34,10 +34,10 @@ class CameraImageProvider(QQuickImageProvider):
         with self._lock:
             self._frames[camera_id] = frame.copy()
 
-    def update_heatmap(self, camera_id: str, anomaly_map: np.ndarray) -> None:
-        """更新指定相机的异常热力图。anomaly_map 是单通道 float32 数组。"""
+    def update_heatmap(self, camera_id: str, heatmap: np.ndarray) -> None:
+        """更新指定相机的异常热力图。heatmap 是单通道 float32 数组。"""
         with self._lock:
-            self._heatmaps[camera_id] = anomaly_map.copy()
+            self._heatmaps[camera_id] = heatmap.copy()
 
     def requestImage(self, image_id: str, size, requested_size):
         """QML 引擎调用此方法请求图像。
@@ -73,15 +73,15 @@ class CameraImageProvider(QQuickImageProvider):
         qimage.rgb_data_holder = rgb
         return qimage
 
-    def _render_heatmap(self, frame: np.ndarray, anomaly_map: np.ndarray | None) -> QImage:
+    def _render_heatmap(self, frame: np.ndarray, heatmap: np.ndarray | None) -> QImage:
         """将 BGR 原图与异常热力图叠加渲染。"""
         import cv2
 
         h, w = frame.shape[:2]
 
-        if anomaly_map is not None:
+        if heatmap is not None:
             # 使用真实异常图：缩放到原图尺寸并叠加
-            amap = anomaly_map.astype(np.float32)
+            amap = heatmap.astype(np.float32)
             if amap.shape[:2] != (h, w):
                 amap = cv2.resize(amap, (w, h), interpolation=cv2.INTER_LINEAR)
             # 归一化到 0-255

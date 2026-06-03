@@ -87,7 +87,7 @@ class RoiRefineResult:
     """对齐和缩放后的标准 ROI 图。"""
 
     texture_ready_image: Optional[Any]
-    """为纹理异常检测模型准备的输入图；未启用时为空。"""
+    """为 PatchCore 准备的纹理输入图；未启用时为空。"""
 
     target_mask: Any
     """标准 ROI 内的目标前景 mask。"""

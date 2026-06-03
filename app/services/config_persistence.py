@@ -45,18 +45,15 @@ class ConfigPersistenceService:
             if not cid or cid in existing:
                 continue
             fc = cam.get("filter_classifier", {})
-            cal = cam.get("calibration", {})
             self.create_camera({
                 "camera_id": cid,
                 "seat_model_id": "default",
                 "type": cam.get("type", "mvs"),
                 "source": cam.get("source", ""),
                 "enabled": 1 if cam.get("enabled", True) else 0,
-                "efficientad_model_path": cam.get("efficientad_model_path", ""),
+                "patchcore_model_path": cam.get("patchcore_model_path", ""),
                 "filter_classifier_path": fc.get("model_path", ""),
                 "filter_classifier_enabled": 1 if fc.get("enabled") else 0,
-                "calibration_normalizer": cal.get("normalizer_path", ""),
-                "calibration_projector": cal.get("projector_path", ""),
                 "display_order": idx,
             })
 
@@ -94,11 +91,9 @@ class ConfigPersistenceService:
                 type TEXT DEFAULT 'mvs',
                 source TEXT NOT NULL DEFAULT '',
                 enabled INTEGER DEFAULT 1,
-                efficientad_model_path TEXT DEFAULT '',
+                patchcore_model_path TEXT DEFAULT '',
                 filter_classifier_path TEXT DEFAULT '',
                 filter_classifier_enabled INTEGER DEFAULT 0,
-                calibration_normalizer TEXT DEFAULT '',
-                calibration_projector TEXT DEFAULT '',
                 display_order INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -125,6 +120,7 @@ class ConfigPersistenceService:
             CREATE INDEX IF NOT EXISTS idx_model_camera ON model_files(camera_id);
             CREATE INDEX IF NOT EXISTS idx_model_active ON model_files(camera_id, model_type, is_active);
         """)
+        _ensure_camera_patchcore_column(conn)
         conn.commit()
 
     # ---------------------------------------------------------------- K-V config
@@ -274,20 +270,17 @@ class ConfigPersistenceService:
             conn.execute(
                 """INSERT INTO camera_configs
                    (camera_id, seat_model_id, type, source, enabled,
-                    efficientad_model_path, filter_classifier_path,
+                    patchcore_model_path, filter_classifier_path,
                     filter_classifier_enabled,
-                    calibration_normalizer, calibration_projector,
                     display_order, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     camera["camera_id"], camera["seat_model_id"],
                     camera.get("type", "mvs"), camera.get("source", ""),
                     camera.get("enabled", 1),
-                    camera.get("efficientad_model_path", ""),
+                    camera.get("patchcore_model_path", ""),
                     camera.get("filter_classifier_path", ""),
                     camera.get("filter_classifier_enabled", 0),
-                    camera.get("calibration_normalizer", ""),
-                    camera.get("calibration_projector", ""),
                     camera.get("display_order", 0), now, now,
                 ),
             )
@@ -295,9 +288,9 @@ class ConfigPersistenceService:
 
     def update_camera(self, camera_id: str, **kwargs: Any) -> None:
         allowed = {
-            "type", "source", "enabled", "efficientad_model_path",
+            "type", "source", "enabled", "patchcore_model_path",
             "filter_classifier_path", "filter_classifier_enabled",
-            "calibration_normalizer", "calibration_projector", "display_order",
+            "display_order",
         }
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
@@ -416,6 +409,15 @@ def _flatten_and_insert(conn: sqlite3.Connection, data: dict, prefix: str) -> No
                 "INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)",
                 (full_key, str(value)),
             )
+
+
+def _ensure_camera_patchcore_column(conn: sqlite3.Connection) -> None:
+    columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(camera_configs)").fetchall()
+    }
+    if "patchcore_model_path" not in columns:
+        conn.execute("ALTER TABLE camera_configs ADD COLUMN patchcore_model_path TEXT DEFAULT ''")
 
 
 def _set_nested(data: dict, key: str, value: str) -> None:

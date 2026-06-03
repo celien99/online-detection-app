@@ -7,13 +7,10 @@ from __future__ import annotations
 
 from pathlib import Path
 from time import perf_counter
-from typing import TYPE_CHECKING, Optional, Union
+from typing import Optional, Union
 
 import cv2
 import numpy as np
-
-if TYPE_CHECKING:
-    import torch
 
 from ..config import FilterClassifierConfig
 from ..core_types import FilterClassifierResult
@@ -33,7 +30,6 @@ class FilterClassifierService:
     ) -> None:
         self.config = config
         self._model = model
-        self._device: str = config.device
 
     @classmethod
     def load(cls, model_path: Union[str, Path]) -> "FilterClassifierService":
@@ -56,13 +52,13 @@ class FilterClassifierService:
         """对单张 ROI BGR 图像运行分类推理。
 
         Returns:
-            FilterClassifierResult，其中 is_real_defect=True 表示保留纹理异常检测的 NG 判定，
+            FilterClassifierResult，其中 is_real_defect=True 表示保留 PatchCore 的 NG 判定，
             is_real_defect=False 表示分类器认为这是误报，应抑制为 OK。
         """
         import torch
 
         started_at = perf_counter()
-        diagnostics: dict[str, float | str] = {}
+        diagnostics: dict[str, float] = {}
 
         try:
             if self._model is None:
@@ -119,103 +115,14 @@ class FilterClassifierService:
                 diagnostics=diagnostics,
             )
 
-        except Exception:
+        except Exception as exc:
             diagnostics["total_ms"] = (perf_counter() - started_at) * 1000.0
             diagnostics["error_prediction_failed"] = 1.0
             return FilterClassifierResult(
-                is_real_defect=True,  # 故障安全：不抑制纹理异常检测结果
+                is_real_defect=True,  # 故障安全：不抑制 PatchCore 结果
                 confidence=0.0,
                 real_defect_score=0.0,
                 false_alarm_score=0.0,
                 class_id=1,
                 diagnostics=diagnostics,
-            )
-
-    def predict_dual_modal(
-        self, patch_image: np.ndarray,
-        ead_features: dict[str, np.ndarray] | None = None,
-        unified_emb: list[float] | None = None,
-    ) -> FilterClassifierResult:
-        """三模态推理：patch 图像 + EfficientAD 特征 + Unified Embedding。
-
-        所有三个输入均为必需参数——当特征或嵌入不可用时，
-        传入 zero tensor 以保证与 TorchScript 模型的参数签名一致。
-        """
-        import torch
-
-        if self._model is None:
-            return FilterClassifierResult(
-                is_real_defect=True, confidence=0.0,
-                real_defect_score=0.0, false_alarm_score=0.0,
-                class_id=1,
-                diagnostics={"mode": "fallback_no_model", "reason": "model not loaded"},
-            )
-
-        try:
-            input_size = self.config.input_size
-
-            # Preprocess image: BGR -> RGB -> resize -> normalize
-            rgb = cv2.cvtColor(patch_image, cv2.COLOR_BGR2RGB)
-            resized = cv2.resize(rgb, (input_size, input_size))
-            tensor = torch.from_numpy(resized).permute(2, 0, 1).float().to(self._device) / 255.0
-            mean = torch.as_tensor([0.485, 0.456, 0.406], device=self._device).view(3, 1, 1)
-            std = torch.as_tensor([0.229, 0.224, 0.225], device=self._device).view(3, 1, 1)
-            tensor = (tensor - mean) / std
-            tensor = tensor.unsqueeze(0)
-
-            # Preprocess EfficientAD features → 始终产出 dict（不可用时用 zeros）
-            # 特征键名与 efficientad/engine.py:_extract_features() 产出保持一致
-            feat_tensors: dict[str, torch.Tensor] = {}
-            if ead_features is not None:
-                for key in ["teacher", "student", "difference"]:
-                    if key in ead_features:
-                        arr = ead_features[key]
-                        t = torch.from_numpy(arr).float().to(self._device)
-                        if t.dim() == 3:
-                            t = t.permute(2, 0, 1).unsqueeze(0)  # HWC -> 1CHW
-                        elif t.dim() == 4:
-                            t = t.permute(0, 3, 1, 2)  # NHWC -> NCHW
-                        feat_tensors[key] = t
-            # 补全缺失的特征通道（feature dropout → zeros，与训练时语义一致）
-            for key in ["teacher", "student", "difference"]:
-                if key not in feat_tensors:
-                    ch = 384 if key in ("teacher", "difference") else 768
-                    feat_tensors[key] = torch.zeros(
-                        1, ch, 1, 1, device=self._device
-                    )
-
-            # Preprocess unified embedding → 始终产出 tensor（不可用时用 zeros）
-            if unified_emb is not None:
-                uni_tensor = torch.tensor(
-                    unified_emb, dtype=torch.float32, device=self._device
-                ).unsqueeze(0)
-            else:
-                uni_tensor = torch.zeros(1, 384, device=self._device)
-
-            with torch.no_grad():
-                logits = self._model(tensor, feat_tensors, uni_tensor)
-
-            probs = torch.softmax(logits, dim=1)[0]
-            false_alarm_score = float(probs[0].cpu())
-            real_defect_score = float(probs[1].cpu())
-            class_id = int(torch.argmax(probs).cpu())
-            confidence = float(probs[class_id].cpu())
-            is_real_defect = class_id == 1 and confidence >= self.config.confidence_threshold
-
-            return FilterClassifierResult(
-                is_real_defect=is_real_defect,
-                confidence=confidence,
-                real_defect_score=real_defect_score,
-                false_alarm_score=false_alarm_score,
-                class_id=class_id,
-                diagnostics={"mode": "three_modal" if unified_emb is not None else "dual_modal"},
-            )
-        except Exception:
-            import traceback
-            traceback.print_exc()
-            return FilterClassifierResult(
-                is_real_defect=True, confidence=0.0,
-                real_defect_score=0.0, false_alarm_score=0.0,
-                class_id=1,
-                diagnostics={"mode": "error_fallback", "reason": "inference failed"},
             )

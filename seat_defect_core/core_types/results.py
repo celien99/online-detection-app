@@ -11,13 +11,13 @@ from .pipeline import DetectionResult, ImageQualityDecision
 
 @dataclass
 class TextureAnomalyResult:
-    """纹理异常检测分支输出。"""
+    """纹理异常分支输出。"""
 
     score: float
-    """图像级异常分数 (0-1)。"""
+    """图像级异常分数。"""
 
     threshold: float
-    """异常判定阈值。"""
+    """训练阶段得到的基础异常阈值。"""
 
     is_anomaly: bool
     """是否判定为异常。"""
@@ -25,19 +25,64 @@ class TextureAnomalyResult:
     heatmap: Any
     """ROI 坐标系下的异常热力图。"""
 
-    anomaly_map: Any
-    """模型原始输出异常图。"""
+    valid_patch_ratio: float
+    """有效 patch 占全部 patch 的比例。"""
 
-    valid_pixel_ratio: float = 1.0
-    """ROI 内有效像素比例。"""
+    valid_patch_count: int
+    """有效 patch 数量。"""
 
-    features: Optional[dict[str, Any]] = None  # EfficientAD intermediate features
+    total_patch_count: int
+    """全部 patch 数量。"""
+
+    decision_threshold: float = 0.0
+    """最终工业判定使用的阈值。"""
+
+    peak_patch_score: float = 0.0
+    """当前图像最高 patch 异常分数。"""
 
     strong_patch_count: int = 0
-    """强异常 patch 数（高于阈值的连通域数量）。"""
+    """达到强异常阈值的 patch 数量。"""
+
+    largest_component_patch_count: int = 0
+    """最大强异常连通域包含的 patch 数量。"""
 
     strong_patch_ratio: float = 0.0
-    """强异常 patch 比例（强异常面积 / ROI 总面积）。"""
+    """强异常 patch 占有效 patch 的比例。"""
+
+    largest_component_patch_ratio: float = 0.0
+    """最大强异常连通域占有效 patch 的比例。"""
+
+    decision_patch_count: int = 0
+    """达到最终判定阈值的 patch 数量。"""
+
+    largest_decision_component_patch_count: int = 0
+    """最大最终判定连通域包含的 patch 数量。"""
+
+    decision_patch_ratio: float = 0.0
+    """达到最终判定阈值的 patch 占比。"""
+
+    largest_decision_component_patch_ratio: float = 0.0
+    """最大最终判定连通域占比。"""
+
+    decision_mode: str = "none"
+    """最终命中的判定模式。"""
+
+
+@dataclass
+class ColorAnomalyResult:
+    """颜色一致性分支输出。"""
+
+    score: float
+    """颜色异常分数。"""
+
+    threshold: float
+    """颜色异常阈值。"""
+
+    is_anomaly: bool
+    """是否判定为颜色异常。"""
+
+    diagnostics: Dict[str, float]
+    """颜色分支诊断指标。"""
 
 
 @dataclass
@@ -73,8 +118,43 @@ class FilterClassifierResult:
     class_id: int
     """预测类别ID：1=real_defect, 0=false_alarm。"""
 
-    diagnostics: Dict[str, float | str] = field(default_factory=dict)
-    """推理诊断指标（延迟、预处理时间、模式标签等）。"""
+    diagnostics: Dict[str, float] = field(default_factory=dict)
+    """推理诊断指标（延迟、预处理时间等）。"""
+
+
+@dataclass
+class RegionPatchCoreResult:
+    """单个局部区域的 PatchCore 输出。"""
+
+    region_id: str
+    """区域 ID。"""
+
+    status: str
+    """区域状态：OK / NG / REJECT。"""
+
+    reason: str
+    """区域状态原因。"""
+
+    box: BoundingBox
+    """标准 ROI 坐标系下的区域矩形框。"""
+
+    texture_result: Optional[TextureAnomalyResult] = None
+    """该区域的纹理异常结果。"""
+
+    patchcore_model_path: Optional[str] = None
+    """该区域使用的 PatchCore 模型路径。"""
+
+    artifact_paths: Dict[str, str] = field(default_factory=dict)
+    """该区域关联的调试产物路径。"""
+
+    timings_ms: Dict[str, float] = field(default_factory=dict)
+    """该区域各阶段耗时，单位毫秒。"""
+
+    error: Optional[InspectionError] = None
+    """该区域结构化错误。"""
+
+    sample: Optional[Any] = field(default=None, repr=False, compare=False)
+    """运行时复用的区域 ROI 样本，不参与公开序列化。"""
 
 
 @dataclass
@@ -109,13 +189,16 @@ class CameraInspectionResult:
     """YOLO 检测结果。"""
 
     texture_result: Optional[TextureAnomalyResult] = None
-    """纹理异常检测结果。"""
+    """完整 ROI 模式下的纹理异常结果。"""
+
+    region_results: List[RegionPatchCoreResult] = field(default_factory=list)
+    """regions 模式下的区域检测结果。"""
+
+    color_result: Optional[ColorAnomalyResult] = None
+    """颜色一致性分支结果。"""
 
     filter_result: Optional[FilterClassifierResult] = None
     """过滤器分类器分支结果。"""
-
-    proposals: list[Any] = field(default_factory=list)  # list[PatchProposal]
-    """PatchCore 级别候选异常 patch 列表。"""
 
     crop_box: Optional[BoundingBox] = None
     """原图坐标系下最终使用的 ROI 裁剪框。"""
@@ -140,9 +223,6 @@ class CameraInspectionResult:
 
     roi_aligned_image: Optional[Any] = field(default=None, repr=False, compare=False)
     """标准 ROI 对齐图像 (BGR)，不含热力图叠加，供上传离线平台使用。"""
-
-    _uploaded_identities: Optional[set[str]] = field(default=None, repr=False, compare=False)
-    """已上传的身份 ID 集合，供 anomaly_uploader 内部使用。"""
 
 
 @dataclass
@@ -223,9 +303,11 @@ class InspectionResponse:
 
 __all__ = [
     "CameraInspectionResult",
+    "ColorAnomalyResult",
     "FilterClassifierResult",
     "InspectionError",
     "InspectionResponse",
     "InspectionResult",
+    "RegionPatchCoreResult",
     "TextureAnomalyResult",
 ]

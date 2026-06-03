@@ -1,29 +1,48 @@
 {
-  "$comment": "EfficientAD 训练专用最小配置。训练仅用到 cameras 列表，不需要 seat_models、fusion 等推理字段。",
+  "$comment": "PatchCore 训练专用最小配置。训练仅用到 cameras 列表，不需要 seat_models、fusion 等推理字段。",
   "seat_defect_inspection": {
     "cameras": [
       {
         "camera_id": "cam_front",
+        "patchcore_model_path": "",
         "enabled": true,
+        "color_insensitive_mode": true,
         "quality": {},
         "detection": {},
         "roi": {},
+        "patchcore": {
+          "backend": "full",
+          "image_size": 256,
+          "patch_size": 32,
+          "stride": 16,
+          "max_memory": 1024,
+          "threshold_quantile": 0.99,
+          "training_threshold_upper_quantile": 0.995,
+          "texture_input": "lab_l",
+          "min_target_coverage": 0.8,
+          "max_ignore_overlap": 0.1,
+          "min_valid_patch_ratio": 0.65,
+          "decision_score_margin": 1.08,
+          "strong_patch_score_ratio": 0.9,
+          "min_strong_patch_count": 3,
+          "min_strong_component_count": 2,
+          "min_strong_patch_ratio": 0.015,
+          "min_strong_component_ratio": 0.01,
+          "critical_score_margin": 1.35,
+          "critical_peak_score_margin": 1.45,
+          "critical_min_component_patch_count": 2,
+          "min_peak_component_patch_count": 1,
+          "backbone_name": "wide_resnet50_2",
+          "feature_layers": ["layer2", "layer3"],
+          "backbone_pretrained": true,
+          "backbone_device": "cuda",
+          "feature_pool_kernel_size": 3,
+          "coreset_sampling_ratio": 0.1
+        },
+        "color_branch": {},
         "filter_classifier": {},
         "rule_engine": {},
-        "efficientad_model_path": "",
-        "efficientad": {
-          "model_path": "",
-          "device": "cuda",
-          "input_size": 256,
-          "teacher_backbone": "wide_resnet50_2",
-          "student_backbone": "resnet18",
-          "min_valid_pixel_ratio": 0.3,
-          "image_threshold": 0.0,
-          "pixel_threshold": 0.0,
-          "epochs": 100,
-          "batch_size": 16,
-          "learning_rate": 0.0001
-        }
+        "regions": []
       }
     ]
   }

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence, Set, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 from ..config import CameraConfig
 from ..core_types import FramePacket, InspectionFrame
 
 
 def normalize_inspection_frames(
-    frames: Sequence[Union[InspectionFrame, Dict[str, Any]]],
+    frames: List[Union[InspectionFrame, Dict[str, Any]]],
 ) -> List[InspectionFrame]:
     """Normalize external input frames into core InspectionFrame objects."""
     normalized = [_normalize_frame(frame) for frame in frames]

@@ -491,20 +491,53 @@ Rectangle {
                                             Layout.fillWidth: true
                                             spacing: Theme.spacingSM
 
-                                            // EfficientAD model path
+                                            // PatchCore model path
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 spacing: Theme.spacingSM
                                                 Text {
-                                                    text: qsTr("EfficientAD 模型:")
+                                                    text: qsTr("PatchCore 模型:")
                                                     color: Theme.textSecondary
                                                     font.pixelSize: Theme.fontSizeXS
                                                     Layout.preferredWidth: 120
                                                 }
                                                 SettingsField {
                                                     Layout.fillWidth: true
-                                                    configPath: "cameras." + index + ".efficientad_model_path"
-                                                    displayValue: modelData.efficientad_model_path || ""
+                                                    configPath: "cameras." + index + ".patchcore_model_path"
+                                                    displayValue: modelData.patchcore_model_path || ""
+                                                }
+                                            }
+
+                                            // YOLO model path
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: Theme.spacingSM
+                                                Text {
+                                                    text: qsTr("YOLO 分割:")
+                                                    color: Theme.textSecondary
+                                                    font.pixelSize: Theme.fontSizeXS
+                                                    Layout.preferredWidth: 120
+                                                }
+                                                SettingsField {
+                                                    Layout.fillWidth: true
+                                                    configPath: "cameras." + index + ".detection.model_path"
+                                                    displayValue: (modelData.detection && modelData.detection.model_path) || ""
+                                                }
+                                            }
+
+                                            // Color-insensitive mode
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: Theme.spacingSM
+                                                Text {
+                                                    text: qsTr("颜色鲁棒模式:")
+                                                    color: Theme.textSecondary
+                                                    font.pixelSize: Theme.fontSizeXS
+                                                    Layout.preferredWidth: 120
+                                                }
+                                                ToggleSwitch {
+                                                    configPath: "cameras." + index + ".color_insensitive_mode"
+                                                    checked: modelData.color_insensitive_mode !== false
                                                 }
                                             }
 
@@ -540,40 +573,6 @@ Rectangle {
                                                     Layout.fillWidth: true
                                                     configPath: "cameras." + index + ".filter_classifier.model_path"
                                                     displayValue: (modelData.filter_classifier && modelData.filter_classifier.model_path) || ""
-                                                }
-                                            }
-
-                                            // Calibration normalizer
-                                            RowLayout {
-                                                Layout.fillWidth: true
-                                                spacing: Theme.spacingSM
-                                                Text {
-                                                    text: qsTr("校准归一化:")
-                                                    color: Theme.textSecondary
-                                                    font.pixelSize: Theme.fontSizeXS
-                                                    Layout.preferredWidth: 120
-                                                }
-                                                SettingsField {
-                                                    Layout.fillWidth: true
-                                                    configPath: "cameras." + index + ".calibration.normalizer_path"
-                                                    displayValue: (modelData.calibration && modelData.calibration.normalizer_path) || ""
-                                                }
-                                            }
-
-                                            // Calibration projector
-                                            RowLayout {
-                                                Layout.fillWidth: true
-                                                spacing: Theme.spacingSM
-                                                Text {
-                                                    text: qsTr("校准投影:")
-                                                    color: Theme.textSecondary
-                                                    font.pixelSize: Theme.fontSizeXS
-                                                    Layout.preferredWidth: 120
-                                                }
-                                                SettingsField {
-                                                    Layout.fillWidth: true
-                                                    configPath: "cameras." + index + ".calibration.projector_path"
-                                                    displayValue: (modelData.calibration && modelData.calibration.projector_path) || ""
                                                 }
                                             }
 
@@ -619,20 +618,37 @@ Rectangle {
                                             font.bold: true
                                         }
 
-                                        // EfficientAD model
+                                        // PatchCore model
                                         RowLayout {
                                             Layout.fillWidth: true
                                             spacing: Theme.spacingSM
                                             Text {
-                                                text: qsTr("检测模型:")
+                                                text: qsTr("PatchCore:")
                                                 color: Theme.textSecondary
                                                 font.pixelSize: Theme.fontSizeXS
                                                 Layout.preferredWidth: 100
                                             }
                                             SettingsField {
                                                 Layout.fillWidth: true
-                                                configPath: "cameras." + index + ".efficientad_model_path"
-                                                displayValue: modelData.efficientad_model_path || ""
+                                                configPath: "cameras." + index + ".patchcore_model_path"
+                                                displayValue: modelData.patchcore_model_path || ""
+                                            }
+                                        }
+
+                                        // YOLO segmentation model
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Theme.spacingSM
+                                            Text {
+                                                text: qsTr("YOLO 分割:")
+                                                color: Theme.textSecondary
+                                                font.pixelSize: Theme.fontSizeXS
+                                                Layout.preferredWidth: 100
+                                            }
+                                            SettingsField {
+                                                Layout.fillWidth: true
+                                                configPath: "cameras." + index + ".detection.model_path"
+                                                displayValue: (modelData.detection && modelData.detection.model_path) || ""
                                             }
                                         }
 
@@ -657,37 +673,36 @@ Rectangle {
                                             }
                                         }
 
-                                        // Calibration normalizer
+                                        // PatchCore backend device
                                         RowLayout {
                                             Layout.fillWidth: true
                                             spacing: Theme.spacingSM
                                             Text {
-                                                text: qsTr("校准归一化:")
+                                                text: qsTr("特征设备:")
                                                 color: Theme.textSecondary
                                                 font.pixelSize: Theme.fontSizeXS
                                                 Layout.preferredWidth: 100
                                             }
                                             SettingsField {
                                                 Layout.fillWidth: true
-                                                configPath: "cameras." + index + ".calibration.normalizer_path"
-                                                displayValue: (modelData.calibration && modelData.calibration.normalizer_path) || ""
+                                                configPath: "cameras." + index + ".patchcore.backbone_device"
+                                                displayValue: (modelData.patchcore && modelData.patchcore.backbone_device) || "cpu"
                                             }
                                         }
 
-                                        // Calibration projector
+                                        // Color branch
                                         RowLayout {
                                             Layout.fillWidth: true
                                             spacing: Theme.spacingSM
                                             Text {
-                                                text: qsTr("校准投影:")
+                                                text: qsTr("颜色分支:")
                                                 color: Theme.textSecondary
                                                 font.pixelSize: Theme.fontSizeXS
                                                 Layout.preferredWidth: 100
                                             }
-                                            SettingsField {
-                                                Layout.fillWidth: true
-                                                configPath: "cameras." + index + ".calibration.projector_path"
-                                                displayValue: (modelData.calibration && modelData.calibration.projector_path) || ""
+                                            ToggleSwitch {
+                                                configPath: "cameras." + index + ".color_branch.enabled"
+                                                checked: modelData.color_branch && modelData.color_branch.enabled
                                             }
                                         }
                                     }

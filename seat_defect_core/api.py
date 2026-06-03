@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from os import PathLike
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import cv2
 
@@ -25,7 +25,7 @@ class SeatDefectInspector:
 
     def inspect(
         self,
-        frames: Sequence[Union[InspectionFrame, Dict[str, Any]]],
+        frames: List[Union[InspectionFrame, Dict[str, Any]]],
         *,
         part_id: Optional[str] = None,
         seat_model_id: Optional[str] = None,
@@ -92,7 +92,7 @@ class SeatDefectInspector:
         )
 
     def warmup(self, *, seat_model_id: Optional[str] = None) -> None:
-        """Preload active runtime models and run a lightweight warmup."""
+        """Preload active runtime models and run a lightweight PatchCore warmup."""
         self._service.warmup(seat_model_id=seat_model_id)
 
 

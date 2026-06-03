@@ -47,7 +47,7 @@ class InspectionService:
             return False
         for cam in cameras:
             detection = cam.get("detection", {})
-            if detection.get("model_path") or cam.get("efficientad_model_path"):
+            if detection.get("model_path") or cam.get("patchcore_model_path"):
                 return False
             if cam.get("filter_classifier", {}).get("enabled"):
                 return False

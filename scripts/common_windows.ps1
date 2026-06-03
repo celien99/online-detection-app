@@ -15,7 +15,6 @@ $WindowsDeploymentRequiredPaths = @(
     "models",
     "deployed_models",
     "deployed_rules",
-    "calibration",
     "logs",
     "screenshots"
 )

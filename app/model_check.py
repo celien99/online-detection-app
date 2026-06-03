@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seat-model-id", default="", help="Optional seat model ID to warm up")
     parser.add_argument("--skip-warmup", action="store_true", help="Only check imports and config parsing")
     parser.add_argument("--basic", action="store_true", help="Only check non-ML imports for GUI/local demo environments")
-    parser.add_argument("--include-training", action="store_true", help="Also check training-only dependencies such as anomalib")
+    parser.add_argument("--include-training", action="store_true", help="Also check PatchCore training dependencies")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     args = parser.parse_args(argv)
 
@@ -164,7 +164,7 @@ def _check_runtime_modules(*, basic: bool = False, include_training: bool = Fals
         "ultralytics",
         ])
     if include_training:
-        module_names.append("anomalib")
+        module_names.append("faiss")
     return [_check_module(name) for name in module_names]
 
 

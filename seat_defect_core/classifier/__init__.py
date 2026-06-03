@@ -1,4 +1,4 @@
-"""过滤器分类器推理引擎，用于抑制纹理异常检测误报。"""
+"""过滤器分类器推理引擎，用于抑制 PatchCore 误报。"""
 
 from .engine import FilterClassifierService
 

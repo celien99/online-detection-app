@@ -25,7 +25,7 @@ def test_model_check_skip_warmup_parses_config_and_restores_cwd(tmp_path: Path, 
                     "type": "file_watcher",
                     "enabled": True,
                     "watch_dir": "./input/CAM_A",
-                    "efficientad_model_path": "./models/cam_a.pt",
+                    "patchcore_model_path": "./models/cam_a.pt",
                 }
             ],
         },
@@ -62,7 +62,7 @@ def test_model_check_warmup_passes_seat_model_id(tmp_path: Path, monkeypatch, ca
                     "type": "file_watcher",
                     "enabled": True,
                     "watch_dir": "./input/CAM_A",
-                    "efficientad_model_path": "./models/cam_a.pt",
+                    "patchcore_model_path": "./models/cam_a.pt",
                 }
             ],
         },
@@ -106,7 +106,7 @@ def test_model_check_returns_failure_when_import_fails(tmp_path: Path, monkeypat
                     "type": "file_watcher",
                     "enabled": True,
                     "watch_dir": "./input/CAM_A",
-                    "efficientad_model_path": "./models/cam_a.pt",
+                    "patchcore_model_path": "./models/cam_a.pt",
                 }
             ],
         },
@@ -136,7 +136,7 @@ def test_model_check_basic_mode_does_not_require_ml_imports(tmp_path: Path, monk
                     "type": "file_watcher",
                     "enabled": True,
                     "watch_dir": "./input/CAM_A",
-                    "efficientad_model_path": "",
+                    "patchcore_model_path": "",
                 }
             ],
         },

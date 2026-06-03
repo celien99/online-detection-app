@@ -1,21 +1,25 @@
 {
-  "$comment": "seat_defect_core 检测配置（示例）。路径类字段相对于本配置文件所在目录解析。全特性配置见 config.best.json。",
+  "$comment": "seat_defect_core 检测配置。路径类字段相对于本配置文件所在目录解析。",
   "seat_defect_inspection": {
+
     "part_id": "seat_demo",
     "default_seat_model_id": "seat_model_a",
+
     "output_json_path": "../outputs/seat_defect_inspection/results.json",
     "debug_dir": "../outputs/seat_defect_inspection/debug",
     "debug_artifacts_enabled": false,
-    "debug_artifact_names": [
-      "overlay"
-    ],
+    "debug_artifact_names": ["overlay"],
+
     "upload_base_url": "http://localhost:8000",
+
     "fusion": {
       "reject_on_any_reject": true,
       "ng_strategy": "any",
       "defect_overrides_reject": true
     },
+
     "cameras": [],
+
     "seat_models": [
       {
         "seat_model_id": "seat_model_a",
@@ -23,8 +27,11 @@
         "cameras": [
           {
             "camera_id": "cam_back",
+            "patchcore_model_path": "../models/seat_model_a/cam_0_lower_patchcore.npz",
             "source": "",
             "enabled": true,
+            "color_insensitive_mode": true,
+
             "quality": {
               "min_laplacian_variance": 80.0,
               "min_brightness_mean": 30.0,
@@ -32,6 +39,7 @@
               "max_overexposed_ratio": 0.25,
               "max_underexposed_ratio": 0.35
             },
+
             "detection": {
               "model_path": "../models/yolo/best.pt",
               "target_class": "seat",
@@ -42,6 +50,7 @@
               "fill_segmentation_holes": true,
               "segmentation_hole_fill_max_area_ratio": 0.08
             },
+
             "roi": {
               "crop_expand_ratio": 0.02,
               "crop_shrink_ratio": 0.0,
@@ -52,6 +61,43 @@
                 "output_height": 256
               }
             },
+
+            "patchcore": {
+              "backend": "full",
+              "image_size": 256,
+              "patch_size": 32,
+              "stride": 16,
+              "max_memory": 1024,
+              "backbone_name": "wide_resnet50_2",
+              "feature_layers": ["layer2", "layer3"],
+              "backbone_pretrained": true,
+              "backbone_device": "mps",
+              "feature_pool_kernel_size": 3,
+              "coreset_sampling_ratio": 0.1,
+              "texture_input": "lab_l",
+              "min_target_coverage": 0.6,
+              "max_ignore_overlap": 0.1,
+              "min_valid_patch_ratio": 0.4,
+              "threshold_quantile": 0.99,
+              "training_threshold_upper_quantile": 0.995,
+              "decision_score_margin": 1.08,
+              "strong_patch_score_ratio": 0.9,
+              "min_strong_patch_count": 3,
+              "min_strong_component_count": 2,
+              "min_strong_patch_ratio": 0.015,
+              "min_strong_component_ratio": 0.01,
+              "critical_score_margin": 1.35,
+              "critical_peak_score_margin": 1.45,
+              "critical_min_component_patch_count": 2,
+              "min_peak_component_patch_count": 1
+            },
+
+            "color_branch": {
+              "enabled": false,
+              "threshold_quantile": 0.99,
+              "min_valid_pixel_ratio": 0.4
+            },
+
             "filter_classifier": {
               "enabled": true,
               "model_path": "../backend/deployed_models/line_a/filter_classifier/",
@@ -59,27 +105,56 @@
               "input_size": 224,
               "confidence_threshold": 0.5
             },
+
             "rule_engine": {
               "enabled": true,
               "rules": [],
               "deployed_rules_path": "../backend/deployed_models/line_a/rules/rules.json"
             },
-            "efficientad_model_path": "../models/seat_model_a/cam_0_lower_efficientad.pt",
-            "efficientad": {
-              "model_path": "../models/seat_model_a/cam_0_lower_efficientad.pt",
-              "device": "mps",
-              "input_size": 256,
-              "teacher_backbone": "wide_resnet50_2",
-              "student_backbone": "resnet18",
-              "min_valid_pixel_ratio": 0.3,
-              "image_threshold": 0.0,
-              "pixel_threshold": 0.0
-            }
+
+            "regions": [
+              {
+                "region_id": "upper",
+                "box": [0.03, 0.03, 0.97, 0.42],
+                "patchcore_model_path": "../models/seat_model_a/cam_0_upper_patchcore.npz",
+                "enabled": true,
+                "patchcore": {
+                  "backbone_pretrained": true,
+                  "min_target_coverage": 0.5,
+                  "min_valid_patch_ratio": 0.35
+                }
+              },
+              {
+                "region_id": "middle",
+                "box": [0.03, 0.38, 0.97, 0.67],
+                "patchcore_model_path": "../models/seat_model_a/cam_0_middle_patchcore.npz",
+                "enabled": true,
+                "patchcore": {
+                  "backbone_pretrained": true,
+                  "min_target_coverage": 0.5,
+                  "min_valid_patch_ratio": 0.35
+                }
+              },
+              {
+                "region_id": "lower",
+                "box": [0.03, 0.66, 0.97, 0.97],
+                "patchcore_model_path": "../models/seat_model_a/cam_0_lower_patchcore.npz",
+                "enabled": true,
+                "patchcore": {
+                  "backbone_pretrained": true,
+                  "min_target_coverage": 0.5,
+                  "min_valid_patch_ratio": 0.35
+                }
+              }
+            ]
           },
           {
             "camera_id": "cam_front",
+            "patchcore_model_path": "../models/seat_model_a/cam_1_lower_patchcore.npz",
             "source": "",
             "enabled": true,
+            "color_insensitive_mode": true,
+
             "quality": {
               "min_laplacian_variance": 80.0,
               "min_brightness_mean": 30.0,
@@ -87,6 +162,7 @@
               "max_overexposed_ratio": 0.25,
               "max_underexposed_ratio": 0.35
             },
+
             "detection": {
               "model_path": "../models/yolo/best.pt",
               "target_class": "seat",
@@ -97,6 +173,7 @@
               "fill_segmentation_holes": true,
               "segmentation_hole_fill_max_area_ratio": 0.08
             },
+
             "roi": {
               "crop_expand_ratio": 0.02,
               "crop_shrink_ratio": 0.0,
@@ -107,6 +184,43 @@
                 "output_height": 256
               }
             },
+
+            "patchcore": {
+              "backend": "full",
+              "image_size": 256,
+              "patch_size": 32,
+              "stride": 16,
+              "max_memory": 1024,
+              "backbone_name": "wide_resnet50_2",
+              "feature_layers": ["layer2", "layer3"],
+              "backbone_pretrained": true,
+              "backbone_device": "mps",
+              "feature_pool_kernel_size": 3,
+              "coreset_sampling_ratio": 0.1,
+              "texture_input": "lab_l",
+              "min_target_coverage": 0.6,
+              "max_ignore_overlap": 0.1,
+              "min_valid_patch_ratio": 0.4,
+              "threshold_quantile": 0.99,
+              "training_threshold_upper_quantile": 0.995,
+              "decision_score_margin": 1.08,
+              "strong_patch_score_ratio": 0.9,
+              "min_strong_patch_count": 3,
+              "min_strong_component_count": 2,
+              "min_strong_patch_ratio": 0.015,
+              "min_strong_component_ratio": 0.01,
+              "critical_score_margin": 1.35,
+              "critical_peak_score_margin": 1.45,
+              "critical_min_component_patch_count": 2,
+              "min_peak_component_patch_count": 1
+            },
+
+            "color_branch": {
+              "enabled": false,
+              "threshold_quantile": 0.99,
+              "min_valid_pixel_ratio": 0.4
+            },
+
             "filter_classifier": {
               "enabled": true,
               "model_path": "../backend/deployed_models/line_a/filter_classifier/",
@@ -114,22 +228,48 @@
               "input_size": 224,
               "confidence_threshold": 0.5
             },
+
             "rule_engine": {
               "enabled": true,
               "rules": [],
               "deployed_rules_path": "../backend/deployed_models/line_a/rules/rules.json"
             },
-            "efficientad_model_path": "../models/seat_model_a/cam_1_lower_efficientad.pt",
-            "efficientad": {
-              "model_path": "../models/seat_model_a/cam_1_lower_efficientad.pt",
-              "device": "mps",
-              "input_size": 256,
-              "teacher_backbone": "wide_resnet50_2",
-              "student_backbone": "resnet18",
-              "min_valid_pixel_ratio": 0.3,
-              "image_threshold": 0.0,
-              "pixel_threshold": 0.0
-            }
+
+            "regions": [
+              {
+                "region_id": "upper",
+                "box": [0.03, 0.03, 0.97, 0.42],
+                "patchcore_model_path": "../models/seat_model_a/cam_1_upper_patchcore.npz",
+                "enabled": true,
+                "patchcore": {
+                  "backbone_pretrained": true,
+                  "min_target_coverage": 0.5,
+                  "min_valid_patch_ratio": 0.35
+                }
+              },
+              {
+                "region_id": "middle",
+                "box": [0.03, 0.33, 0.97, 0.74],
+                "patchcore_model_path": "../models/seat_model_a/cam_1_middle_patchcore.npz",
+                "enabled": true,
+                "patchcore": {
+                  "backbone_pretrained": true,
+                  "min_target_coverage": 0.5,
+                  "min_valid_patch_ratio": 0.35
+                }
+              },
+              {
+                "region_id": "lower",
+                "box": [0.03, 0.66, 0.97, 0.97],
+                "patchcore_model_path": "../models/seat_model_a/cam_1_lower_patchcore.npz",
+                "enabled": true,
+                "patchcore": {
+                  "backbone_pretrained": true,
+                  "min_target_coverage": 0.5,
+                  "min_valid_patch_ratio": 0.35
+                }
+              }
+            ]
           }
         ]
       }

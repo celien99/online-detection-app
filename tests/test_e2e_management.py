@@ -63,16 +63,16 @@ def test_model_file_lifecycle():
 
         src = Path(tmp) / "test_model.pt"
         src.write_bytes(b"model weights")
-        mf = mfs.import_file("cam1", "efficientad", str(src))
+        mf = mfs.import_file("cam1", "patchcore", str(src))
 
         assert mfs.verify_checksum(mf["id"]) is True
 
-        active = mfs.get_active("cam1", "efficientad")
+        active = mfs.get_active("cam1", "patchcore")
         assert active is not None
 
         src2 = Path(tmp) / "test_model_v2.pt"
         src2.write_bytes(b"model weights v2")
-        mf2 = mfs.import_file("cam1", "efficientad", str(src2))
+        mf2 = mfs.import_file("cam1", "patchcore", str(src2))
         mfs.activate(mf["id"])
-        active = mfs.get_active("cam1", "efficientad")
+        active = mfs.get_active("cam1", "patchcore")
         assert active["id"] == mf["id"]

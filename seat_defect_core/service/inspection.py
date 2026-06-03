@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 from time import perf_counter
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from ..fusion import fuse_camera_results
 from ..core_types import CameraInspectionResult, InspectionError, InspectionFrame, InspectionResult
-from .core import CameraPipeline, InspectionService
+from .core import InspectionService
 from .frames import (
     build_frame_map,
     build_frame_packet,
@@ -18,6 +18,8 @@ from .frames import (
 )
 from .inspection_camera import (
     _StageTimer,
+    RegionPatchCorePlan,
+    finish_region_patchcore_plan,
     inspect_prepared_camera,
 )
 from .response import (
@@ -142,7 +144,7 @@ def _finish_result_timing(result: InspectionResult, started_at: float) -> None:
 def _inspect_pending_cameras(
     service: InspectionService,
     pending_cameras,
-    pipelines: Dict[str, CameraPipeline],
+    pipelines: Dict[str, object],
     seat_model_id: Optional[str],
 ) -> Dict[int, CameraInspectionResult]:
     if not pending_cameras:
@@ -193,9 +195,10 @@ def _inspect_pending_cameras(
                     )
 
     ordered_outputs: Dict[int, CameraInspectionResult] = dict(prepared_errors)
+    plans: List[Tuple[int, RegionPatchCorePlan]] = []
     for index, (frame_packet, camera, prepared, camera_timer) in prepared_by_index.items():
         try:
-            ordered_outputs[index] = inspect_prepared_camera(
+            output = inspect_prepared_camera(
                 service,
                 frame_packet,
                 camera,
@@ -203,6 +206,10 @@ def _inspect_pending_cameras(
                 seat_model_id,
                 camera_timer,
             )
+            if isinstance(output, RegionPatchCorePlan):
+                plans.append((index, output))
+            else:
+                ordered_outputs[index] = output
         except Exception as exc:
             ordered_outputs[index] = _pipeline_failed_result(
                 frame_packet,
@@ -210,6 +217,7 @@ def _inspect_pending_cameras(
                 exc,
             )
 
+    _finish_region_plans(service, plans, ordered_outputs)
     return ordered_outputs
 
 
@@ -228,6 +236,54 @@ def _group_pending_by_detection(pending_cameras, pipelines) -> Dict[tuple, List[
         )
         groups[key].append((index, camera, frame_packet, pipeline))
     return groups
+
+
+def _finish_region_plans(
+    service: InspectionService,
+    plans: List[Tuple[int, RegionPatchCorePlan]],
+    ordered_outputs: Dict[int, CameraInspectionResult],
+) -> None:
+    if not plans:
+        return
+
+    all_items = []
+    slices = []
+    for index, plan in plans:
+        start = len(all_items)
+        all_items.extend(plan.patchcore_items)
+        end = len(all_items)
+        slices.append((index, plan, start, end))
+
+    batch_started_at = perf_counter()
+    try:
+        texture_results = service.predict_patchcore_batch(all_items)
+    except Exception as exc:
+        for index, plan in plans:
+            ordered_outputs[index] = _pipeline_failed_result(
+                plan.frame_packet,
+                plan.seat_model_id,
+                exc,
+            )
+        return
+
+    batch_elapsed_ms = _elapsed_ms(batch_started_at)
+    per_item_ms = batch_elapsed_ms / max(1, len(texture_results))
+    for index, plan, start, end in slices:
+        plan_results = texture_results[start:end]
+        plan.camera_timer.record("region_patchcore_batch", per_item_ms * len(plan_results))
+        try:
+            ordered_outputs[index] = finish_region_patchcore_plan(
+                service,
+                plan,
+                plan_results,
+                patchcore_elapsed_ms=per_item_ms * len(plan_results),
+            )
+        except Exception as exc:
+            ordered_outputs[index] = _pipeline_failed_result(
+                plan.frame_packet,
+                plan.seat_model_id,
+                exc,
+            )
 
 
 def _pipeline_failed_result(

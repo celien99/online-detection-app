@@ -61,7 +61,7 @@ class TestInspectionService:
                             "camera_id": "CAM_LOCAL",
                             "type": "file_watcher",
                             "enabled": True,
-                            "efficientad_model_path": "",
+                            "patchcore_model_path": "",
                             "filter_classifier": {"enabled": False},
                         }
                     ],
@@ -87,7 +87,7 @@ class TestInspectionService:
                             "camera_id": "CAM_LOCAL",
                             "type": "file_watcher",
                             "enabled": True,
-                            "efficientad_model_path": "",
+                            "patchcore_model_path": "",
                             "filter_classifier": {"enabled": False},
                         }
                     ],

@@ -17,14 +17,13 @@ def build_model_scoped_root(base_dir: Path, seat_model_id: Optional[str]) -> Pat
     return base_dir / seat_model_id
 
 
-def select_texture_input(roi) -> Any:
-    """返回 EfficientAD 推理用图像。
-
-    统一使用 aligned_roi_image (BGR)，不做 BGRA gray fill。
-    gray fill 在 mask 边界产生高强度 ST distance 伪影，会淹没表面缺陷信号。
-    非目标区域由 _grid_pool_score 配合 target_binary mask 在 scoring 阶段排除。
-    """
-    return roi.aligned_roi_image
+def select_patchcore_input(roi) -> Any:
+    """统一返回 PatchCore 真正消费的图像，避免训练、推理、调试图脱节。"""
+    return (
+        roi.texture_ready_image
+        if roi.texture_ready_image is not None
+        else roi.aligned_roi_image
+    )
 
 
 def write_image(path: Path, image: Any) -> None:

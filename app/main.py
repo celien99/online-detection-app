@@ -200,9 +200,9 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
             fc = cam.get("filter_classifier", {})
             if fc.get("enabled") and fc.get("model_path"):
                 hot_reload.watch(fc["model_path"])
-            ead_path = cam.get("efficientad_model_path", "")
-            if ead_path:
-                hot_reload.watch(ead_path)
+            patchcore_path = cam.get("patchcore_model_path", "")
+            if patchcore_path:
+                hot_reload.watch(patchcore_path)
         hot_reload.on_change(lambda: setattr(inspection_service, '_inspector', None))
         hot_reload.start()
 
@@ -282,9 +282,9 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
             fc = cam.get("filter_classifier", {})
             if fc.get("enabled") and fc.get("model_path"):
                 hot_reload.watch(fc["model_path"])
-            ead_path = cam.get("efficientad_model_path", "")
-            if ead_path:
-                hot_reload.watch(ead_path)
+            patchcore_path = cam.get("patchcore_model_path", "")
+            if patchcore_path:
+                hot_reload.watch(patchcore_path)
 
     seat_model_vm = SeatModelViewModel(seat_model_service, on_switch=_on_seat_model_switch)
     model_deploy_vm = ModelDeployViewModel(model_file_service, platform_sync)
@@ -370,7 +370,7 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                     if send_legacy_plc_defect:
                         plc.send_defect_signal(DefectSignal(camera_id=cr.camera_id, severity=severity))
                     if hasattr(cr, 'texture_result') and cr.texture_result is not None:
-                        amap = getattr(cr.texture_result, 'anomaly_map', None)
+                        amap = getattr(cr.texture_result, 'heatmap', None)
                         if amap is not None:
                             image_provider.update_heatmap(cr.camera_id, amap)
 

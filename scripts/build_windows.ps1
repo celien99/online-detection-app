@@ -48,7 +48,7 @@ $DistRoot = Join-Path $RepoRoot "dist/OnlineDetectionApp"
 $ConfigTarget = Join-Path $DistRoot "config.json"
 Copy-Item -Force $ConfigTemplate $ConfigTarget
 
-foreach ($dir in @("models", "deployed_models", "deployed_rules", "calibration", "logs", "screenshots")) {
+foreach ($dir in @("models", "deployed_models", "deployed_rules", "logs", "screenshots")) {
     New-Item -ItemType Directory -Force -Path (Join-Path $DistRoot $dir) | Out-Null
 }
 
@@ -151,10 +151,10 @@ OnlineDetectionApp deployment
 1. Edit config.json for the test computer:
    - camera source: prefer mvs://sn/<camera-serial>?trigger=hardware&trigger_source=Line0
    - line_signal.host/port and Modbus point table
-   - model, rule, and calibration paths
+   - PatchCore, YOLO, Filter, and rule paths
 2. Or run 00_create_production_config.bat to generate config.json from camera serial and PLC host.
 3. Install Hikrobot MVS runtime on the test computer if the bundled DLL is not enough for the camera model.
-4. Put model files under models/, deployed_models/, deployed_rules/, and calibration/.
+4. Put PatchCore, YOLO, Filter, and rule files under models/, deployed_models/, and deployed_rules/.
 5. Run 00_verify_deployment.bat.
 6. Run 01_run_diagnostics.bat.
 7. Run 02_check_models.bat.

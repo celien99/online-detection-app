@@ -87,7 +87,7 @@ class ModelDeployViewModel(QObject):
                 version = model.get("model_version", "")
                 for dep in model.get("deployments", []):
                     camera_id = dep.get("camera_id", target)
-                    model_type = dep.get("model_type", "efficientad")
+                    model_type = dep.get("model_type", "patchcore")
                     download_url = dep.get("download_url", "")
                     if download_url:
                         dest = f"{tempfile.gettempdir()}/sync_{camera_id}_{model_type}.pt"

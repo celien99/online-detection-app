@@ -24,7 +24,7 @@ MIN_COMPONENT_AREA_PIXELS = 200
 
 
 class RoiRefineEngine:
-    """把 YOLO 分割结果整理成纹理异常检测模型可直接消费的 ROI。"""
+    """把 YOLO 分割结果整理成 PatchCore 可直接消费的 ROI。"""
 
     def __init__(self, config: RoiRefineConfig) -> None:
         self.config = config
@@ -136,7 +136,7 @@ class RoiRefineEngine:
         return cleaned
 
     def _erode_target_mask(self, target_mask: np.ndarray) -> np.ndarray:
-        """按配置把 YOLO 前景 mask 向内收缩，避免边缘噪声进入纹理异常检测。"""
+        """按配置把 YOLO 前景 mask 向内收缩，避免边缘噪声进入 PatchCore。"""
         erode_pixels = int(max(0, self.config.mask_erode_pixels))
         if erode_pixels <= 0:
             return target_mask
@@ -188,7 +188,7 @@ class RoiRefineEngine:
 
 
 def _apply_mask(image: np.ndarray, valid_mask: np.ndarray) -> np.ndarray:
-    """Build a BGRA texture anomaly detection input whose mask background is transparent."""
+    """Build a BGRA PatchCore input whose mask background is transparent."""
     if image.ndim == 2:
         base = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     elif image.shape[2] == 4:
@@ -242,24 +242,37 @@ def _letterbox_bundle(
     output_width: int,
     output_height: int,
 ) -> Tuple[np.ndarray, np.ndarray, bool]:
-    """Resize ROI image and mask to the canonical texture anomaly detection canvas.
-
-    Uses direct stretch resize (not letterbox) to match anomalib's training-time
-    PreProcessor transform: Resize(size=[256, 256], interpolation=BILINEAR).
-    """
+    """Preserve ROI aspect ratio when mapping to the canonical PatchCore canvas."""
     src_height, src_width = roi_image.shape[:2]
+    scale = min(float(output_width) / float(src_width), float(output_height) / float(src_height))
+    resized_width = max(1, int(round(src_width * scale)))
+    resized_height = max(1, int(round(src_height * scale)))
+    offset_x = max(0, (output_width - resized_width) // 2)
+    offset_y = max(0, (output_height - resized_height) // 2)
 
-    roi_interpolation = cv2.INTER_AREA if src_width >= output_width and src_height >= output_height else cv2.INTER_LINEAR
+    roi_interpolation = cv2.INTER_AREA if scale <= 1.0 else cv2.INTER_LINEAR
     resized_roi = cv2.resize(
         roi_image,
-        (output_width, output_height),
+        (resized_width, resized_height),
         interpolation=roi_interpolation,
     )
     resized_target = cv2.resize(
         target_mask,
-        (output_width, output_height),
+        (resized_width, resized_height),
         interpolation=cv2.INTER_NEAREST,
     )
 
-    alignment_applied = src_width != output_width or src_height != output_height
-    return resized_roi, (resized_target > 0).astype(np.uint8), alignment_applied
+    canvas = np.zeros((output_height, output_width, roi_image.shape[2]), dtype=roi_image.dtype)
+    canvas_mask = np.zeros((output_height, output_width), dtype=np.uint8)
+    canvas[offset_y : offset_y + resized_height, offset_x : offset_x + resized_width] = resized_roi
+    canvas_mask[offset_y : offset_y + resized_height, offset_x : offset_x + resized_width] = (
+        resized_target > 0
+    ).astype(np.uint8)
+
+    alignment_applied = (
+        src_width != output_width
+        or src_height != output_height
+        or offset_x != 0
+        or offset_y != 0
+    )
+    return canvas, canvas_mask, alignment_applied

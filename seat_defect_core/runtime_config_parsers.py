@@ -5,29 +5,24 @@ from __future__ import annotations
 import dataclasses
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Type
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
-from .calibration.config import (
-    CalibrationConfig,
-    CameraNormConfig,
-    EMACenterConfig,
-    ProjectionConfig,
-    WhiteningConfig,
-)
 from .config import (
     AlignmentConfig,
     CameraConfig,
+    ColorBranchConfig,
     DetectionConfig,
     FilterClassifierConfig,
     FusionConfig,
     InspectionConfig,
+    PatchCoreConfig,
     QualityGuardConfig,
+    RegionConfig,
     RoiRefineConfig,
     RuleConfig,
     RuleEngineConfig,
     SeatModelConfig,
 )
-from .efficientad import EfficientADConfig
 _LOCAL_PATH_SUFFIXES = {
     ".pt",
     ".pth",
@@ -94,11 +89,49 @@ def _parse_inspection_config(payload: Dict[str, Any], config_dir: Path) -> Inspe
             scope=f"{scope}.fusion",
         ),
         upload_base_url=_optional_string(payload.get("upload_base_url")),
-        calibration=_parse_calibration_config(
-            payload.get("calibration"),
-            scope=f"{scope}.calibration",
-        ),
     )
+
+
+def build_inspection_config(
+    *,
+    cameras: List[Dict[str, Any]],
+    upload_base_url: str = "",
+    part_id: str = "seat_demo",
+    output_json_path: str = "outputs/seat_defect_inspection/results.json",
+    debug_dir: str = "outputs/seat_defect_inspection/debug",
+    debug_artifacts_enabled: bool = True,
+    debug_artifact_names: Optional[List[str]] = None,
+    config_dir: Optional[Path] = None,
+) -> InspectionConfig:
+    """Build a PatchCore runtime config from the online app camera payloads.
+
+    The desktop app camera config also contains capture-layer fields such as
+    ``type``, ``watch_dir`` and ``pattern``. Those fields are intentionally
+    stripped before the strict core parser runs.
+    """
+    root = config_dir or Path.cwd()
+    payload: Dict[str, Any] = {
+        "cameras": [_inspection_camera_payload(camera) for camera in cameras],
+        "output_json_path": output_json_path,
+        "debug_dir": debug_dir,
+        "debug_artifacts_enabled": debug_artifacts_enabled,
+        "debug_artifact_names": debug_artifact_names or ["overlay"],
+        "part_id": part_id,
+        "upload_base_url": upload_base_url,
+    }
+    return _parse_inspection_config(payload, root)
+
+
+def _inspection_camera_payload(camera: Dict[str, Any]) -> Dict[str, Any]:
+    allowed = _field_names(CameraConfig)
+    payload = {
+        key: value
+        for key, value in camera.items()
+        if key in allowed
+    }
+    if "source" not in payload:
+        payload["source"] = camera.get("source", "")
+    return payload
 
 
 def _parse_seat_model_config(
@@ -145,9 +178,9 @@ def _parse_camera_config(payload: Dict[str, Any], config_dir: Path, *, scope: st
 
     return CameraConfig(
         camera_id=_require_string(payload, "camera_id", scope),
-        efficientad_model_path=_resolve_local_path(
+        patchcore_model_path=_resolve_local_path(
             config_dir,
-            _require_string(payload, "efficientad_model_path", scope),
+            _require_string(payload, "patchcore_model_path", scope),
             force=True,
         ),
         source=_resolve_source_path(
@@ -155,6 +188,7 @@ def _parse_camera_config(payload: Dict[str, Any], config_dir: Path, *, scope: st
             _string_or_default(payload.get("source"), ""),
         ),
         enabled=_bool_or_default(payload.get("enabled"), True),
+        color_insensitive_mode=_bool_or_default(payload.get("color_insensitive_mode"), False),
         quality=_parse_quality_guard_config(
             payload.get("quality"),
             scope=f"{scope}.quality",
@@ -168,9 +202,14 @@ def _parse_camera_config(payload: Dict[str, Any], config_dir: Path, *, scope: st
             payload.get("roi"),
             scope=f"{scope}.roi",
         ),
-        efficientad=_parse_efficientad_config(
-            payload.get("efficientad"),
-            scope=f"{scope}.efficientad",
+        patchcore=_parse_patchcore_config(
+            payload.get("patchcore"),
+            config_dir,
+            scope=f"{scope}.patchcore",
+        ),
+        color_branch=_parse_color_branch_config(
+            payload.get("color_branch"),
+            scope=f"{scope}.color_branch",
         ),
         filter_classifier=_parse_filter_classifier_config(
             payload.get("filter_classifier"),
@@ -181,12 +220,10 @@ def _parse_camera_config(payload: Dict[str, Any], config_dir: Path, *, scope: st
             payload.get("rule_engine"),
             scope=f"{scope}.rule_engine",
         ),
-        calibration=_parse_calibration_config(
-            payload.get("calibration"),
-            scope=f"{scope}.calibration",
-        ),
-        color_insensitive_mode=_bool_or_default(
-            payload.get("color_insensitive_mode"), True
+        regions=_parse_region_configs(
+            payload.get("regions"),
+            config_dir,
+            scope=f"{scope}.regions",
         ),
     )
 
@@ -321,41 +358,128 @@ def _parse_detection_config(payload: Any, config_dir: Path, *, scope: str) -> De
     )
 
 
-def _parse_efficientad_config(payload: Any, *, scope: str) -> EfficientADConfig:
-    defaults = EfficientADConfig()
+def _parse_patchcore_config(payload: Any, config_dir: Path, *, scope: str) -> PatchCoreConfig:
+    defaults = PatchCoreConfig()
     if payload is None:
         return defaults
     payload = _expect_dict(payload, scope)
-    _reject_unknown_keys(payload, _field_names(EfficientADConfig), scope)
-    return EfficientADConfig(
-        model_path=_string_or_default(payload.get("model_path"), defaults.model_path),
-        device=_string_or_default(payload.get("device"), defaults.device),
-        input_size=_int_or_default(payload.get("input_size"), defaults.input_size),
-        teacher_backbone=_string_or_default(
-            payload.get("teacher_backbone"), defaults.teacher_backbone
+    _reject_unknown_keys(payload, _field_names(PatchCoreConfig), scope)
+    return PatchCoreConfig(
+        backend=_string_or_default(payload.get("backend"), defaults.backend),
+        image_size=_int_or_default(payload.get("image_size"), defaults.image_size),
+        patch_size=_int_or_default(payload.get("patch_size"), defaults.patch_size),
+        stride=_int_or_default(payload.get("stride"), defaults.stride),
+        max_memory=_int_or_default(payload.get("max_memory"), defaults.max_memory),
+        threshold_quantile=_float_or_default(
+            payload.get("threshold_quantile"),
+            defaults.threshold_quantile,
         ),
-        student_backbone=_string_or_default(
-            payload.get("student_backbone"), defaults.student_backbone
+        training_threshold_upper_quantile=_float_or_default(
+            payload.get("training_threshold_upper_quantile"),
+            defaults.training_threshold_upper_quantile,
         ),
+        texture_input=_string_or_default(payload.get("texture_input"), defaults.texture_input),
+        min_target_coverage=_float_or_default(
+            payload.get("min_target_coverage"),
+            defaults.min_target_coverage,
+        ),
+        max_ignore_overlap=_float_or_default(
+            payload.get("max_ignore_overlap"),
+            defaults.max_ignore_overlap,
+        ),
+        min_valid_patch_ratio=_float_or_default(
+            payload.get("min_valid_patch_ratio"),
+            defaults.min_valid_patch_ratio,
+        ),
+        decision_score_margin=_float_or_default(
+            payload.get("decision_score_margin"),
+            defaults.decision_score_margin,
+        ),
+        strong_patch_score_ratio=_float_or_default(
+            payload.get("strong_patch_score_ratio"),
+            defaults.strong_patch_score_ratio,
+        ),
+        min_strong_patch_count=_int_or_default(
+            payload.get("min_strong_patch_count"),
+            defaults.min_strong_patch_count,
+        ),
+        min_strong_component_count=_int_or_default(
+            payload.get("min_strong_component_count"),
+            defaults.min_strong_component_count,
+        ),
+        min_strong_patch_ratio=_float_or_default(
+            payload.get("min_strong_patch_ratio"),
+            defaults.min_strong_patch_ratio,
+        ),
+        min_strong_component_ratio=_float_or_default(
+            payload.get("min_strong_component_ratio"),
+            defaults.min_strong_component_ratio,
+        ),
+        critical_score_margin=_float_or_default(
+            payload.get("critical_score_margin"),
+            defaults.critical_score_margin,
+        ),
+        critical_peak_score_margin=_float_or_default(
+            payload.get("critical_peak_score_margin"),
+            defaults.critical_peak_score_margin,
+        ),
+        critical_min_component_patch_count=_int_or_default(
+            payload.get("critical_min_component_patch_count"),
+            defaults.critical_min_component_patch_count,
+        ),
+        min_peak_component_patch_count=_int_or_default(
+            payload.get("min_peak_component_patch_count"),
+            defaults.min_peak_component_patch_count,
+        ),
+        backbone_name=_string_or_default(payload.get("backbone_name"), defaults.backbone_name),
+        feature_layers=_string_list(
+            payload.get("feature_layers"),
+            scope=f"{scope}.feature_layers",
+            default=defaults.feature_layers,
+        ),
+        backbone_pretrained=_bool_or_default(
+            payload.get("backbone_pretrained"),
+            defaults.backbone_pretrained,
+        ),
+        backbone_weights_path=_resolve_optional_local_path(
+            config_dir,
+            _optional_string(payload.get("backbone_weights_path")),
+        ),
+        backbone_device=_string_or_default(
+            payload.get("backbone_device"),
+            defaults.backbone_device,
+        ),
+        feature_pool_kernel_size=_int_or_default(
+            payload.get("feature_pool_kernel_size"),
+            defaults.feature_pool_kernel_size,
+        ),
+        coreset_sampling_ratio=_float_or_default(
+            payload.get("coreset_sampling_ratio"),
+            defaults.coreset_sampling_ratio,
+        ),
+    )
+
+
+def _parse_color_branch_config(payload: Any, *, scope: str) -> ColorBranchConfig:
+    defaults = ColorBranchConfig()
+    if payload is None:
+        return defaults
+    payload = _expect_dict(payload, scope)
+    _reject_unknown_keys(payload, _field_names(ColorBranchConfig), scope)
+    return ColorBranchConfig(
+        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
+        threshold_quantile=_float_or_default(
+            payload.get("threshold_quantile"),
+            defaults.threshold_quantile,
+        ),
+        threshold=_optional_float(payload.get("threshold")),
         min_valid_pixel_ratio=_float_or_default(
-            payload.get("min_valid_pixel_ratio"), defaults.min_valid_pixel_ratio
+            payload.get("min_valid_pixel_ratio"),
+            defaults.min_valid_pixel_ratio,
         ),
-        image_threshold=_float_or_default(
-            payload.get("image_threshold"), defaults.image_threshold
-        ),
-        pixel_threshold=_float_or_default(
-            payload.get("pixel_threshold"), defaults.pixel_threshold
-        ),
-        epochs=_int_or_default(payload.get("epochs"), defaults.epochs),
-        batch_size=_int_or_default(payload.get("batch_size"), defaults.batch_size),
-        learning_rate=_float_or_default(
-            payload.get("learning_rate"), defaults.learning_rate
-        ),
-        validation_split=_float_or_default(
-            payload.get("validation_split"), defaults.validation_split
-        ),
-        early_stopping_patience=_int_or_default(
-            payload.get("early_stopping_patience"), defaults.early_stopping_patience
+        training_threshold_upper_quantile=_float_or_default(
+            payload.get("training_threshold_upper_quantile"),
+            defaults.training_threshold_upper_quantile,
         ),
     )
 
@@ -431,90 +555,72 @@ def _parse_rule_config(payload: Any, *, scope: str) -> RuleConfig:
     )
 
 
-def _parse_calibration_config(payload: Any, *, scope: str) -> CalibrationConfig:
-    """解析完整校准配置。返回默认值如果 payload 为 None。"""
-    defaults = CalibrationConfig()
+def _parse_region_configs(
+    payload: Any,
+    config_dir: Path,
+    *,
+    scope: str,
+) -> List[RegionConfig]:
     if payload is None:
-        return defaults
+        return []
+    return [
+        _parse_region_config(item, config_dir, scope=f"{scope}[{index}]")
+        for index, item in enumerate(_ensure_list(payload, scope))
+    ]
+
+
+def _parse_region_config(
+    payload: Any,
+    config_dir: Path,
+    *,
+    scope: str,
+) -> RegionConfig:
     payload = _expect_dict(payload, scope)
-    _reject_unknown_keys(payload, _field_names(CalibrationConfig), scope)
-    return CalibrationConfig(
-        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
-        camera_norm=_parse_camera_norm_config(
-            payload.get("camera_norm"), scope=f"{scope}.camera_norm"
+    _reject_unknown_keys(payload, _field_names(RegionConfig), scope)
+    return RegionConfig(
+        region_id=_require_string(payload, "region_id", scope),
+        box=_region_box(payload.get("box"), scope=f"{scope}.box"),
+        patchcore_model_path=_resolve_local_path(
+            config_dir,
+            _require_string(payload, "patchcore_model_path", scope),
+            force=True,
         ),
-        projection=_parse_projection_config(
-            payload.get("projection"), scope=f"{scope}.projection"
-        ),
-        whitening=_parse_whitening_config(
-            payload.get("whitening"), scope=f"{scope}.whitening"
-        ),
-        ema_center=_parse_ema_center_config(
-            payload.get("ema_center"), scope=f"{scope}.ema_center"
-        ),
-        camera_norm_paths=_string_dict_or_default(
-            payload.get("camera_norm_paths"), defaults.camera_norm_paths
+        enabled=_bool_or_default(payload.get("enabled"), True),
+        patchcore=(
+            _parse_patchcore_config(
+                payload.get("patchcore"),
+                config_dir,
+                scope=f"{scope}.patchcore",
+            )
+            if payload.get("patchcore") is not None
+            else None
         ),
     )
 
 
-def _parse_camera_norm_config(payload: Any, *, scope: str) -> CameraNormConfig:
-    defaults = CameraNormConfig()
-    if payload is None:
-        return defaults
-    payload = _expect_dict(payload, scope)
-    _reject_unknown_keys(payload, _field_names(CameraNormConfig), scope)
-    return CameraNormConfig(
-        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
-        stats_path=_string_or_default(payload.get("stats_path"), defaults.stats_path),
-    )
+def _region_box(value: Any, *, scope: str) -> List[float]:
+    items = [float(item) for item in _ensure_list(value, scope)]
+    if len(items) != 4:
+        raise ValueError(f"{scope} 必须包含 4 个归一化坐标")
+    x1, y1, x2, y2 = items
+    if not (0.0 <= x1 < x2 <= 1.0 and 0.0 <= y1 < y2 <= 1.0):
+        raise ValueError(f"{scope} 必须满足 0 <= x1 < x2 <= 1 且 0 <= y1 < y2 <= 1")
+    return items
 
 
-def _parse_projection_config(payload: Any, *, scope: str) -> ProjectionConfig:
-    defaults = ProjectionConfig()
-    if payload is None:
-        return defaults
-    payload = _expect_dict(payload, scope)
-    _reject_unknown_keys(payload, _field_names(ProjectionConfig), scope)
-    return ProjectionConfig(
-        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
-        projector_path=_string_or_default(
-            payload.get("projector_path"), defaults.projector_path
-        ),
-    )
-
-
-def _parse_whitening_config(payload: Any, *, scope: str) -> WhiteningConfig:
-    defaults = WhiteningConfig()
-    if payload is None:
-        return defaults
-    payload = _expect_dict(payload, scope)
-    _reject_unknown_keys(payload, _field_names(WhiteningConfig), scope)
-    return WhiteningConfig(
-        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
-        method=_string_or_default(payload.get("method"), defaults.method),
-        regularization=_float_or_default(
-            payload.get("regularization"), defaults.regularization
-        ),
-        matrix_path=_string_or_default(payload.get("matrix_path"), defaults.matrix_path),
-    )
-
-
-def _parse_ema_center_config(payload: Any, *, scope: str) -> EMACenterConfig:
-    defaults = EMACenterConfig()
-    if payload is None:
-        return defaults
-    payload = _expect_dict(payload, scope)
-    _reject_unknown_keys(payload, _field_names(EMACenterConfig), scope)
-    return EMACenterConfig(
-        enabled=_bool_or_default(payload.get("enabled"), defaults.enabled),
-        alpha=_float_or_default(payload.get("alpha"), defaults.alpha),
-        min_samples=_int_or_default(payload.get("min_samples"), defaults.min_samples),
-        novelty_threshold=_float_or_default(
-            payload.get("novelty_threshold"), defaults.novelty_threshold
-        ),
-        centers_path=_string_or_default(payload.get("centers_path"), defaults.centers_path),
-    )
+def _select_seat_model_payload(
+    seat_models: List[Dict[str, Any]],
+    seat_model_id: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    if not seat_models:
+        return None
+    if seat_model_id is None:
+        return seat_models[0]
+    for item in seat_models:
+        if item.get("seat_model_id") == seat_model_id:
+            return item
+    available = ", ".join(str(item.get("seat_model_id")) for item in seat_models)
+    raise ValueError(f"未知 seat_model_id `{seat_model_id}`，可选值：{available}")
 
 
 # 通用字段读取与路径解析工具。
@@ -607,13 +713,6 @@ def _optional_int(value: Any) -> Optional[int]:
     return int(value)
 
 
-def _string_dict_or_default(value: Any, default: dict[str, str]) -> dict[str, str]:
-    """解析字符串→字符串映射，用于 camera_norm_paths 等字段。"""
-    if value is None or not isinstance(value, dict):
-        return dict(default)
-    return {str(k): str(v) for k, v in value.items()}
-
-
 def _has_path_separator(value: str) -> bool:
     return os.sep in value or (os.altsep is not None and os.altsep in value)
 
@@ -655,7 +754,7 @@ def _resolve_optional_model_path(config_dir: Path, value: Optional[str]) -> Opti
 
 
 def _resolve_optional_local_path(config_dir: Path, value: Optional[str]) -> Optional[str]:
-    if value is None or value == "":
+    if _is_missing(value):
         return None
     return _resolve_local_path(config_dir, value, force=True)
 

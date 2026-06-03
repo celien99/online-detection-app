@@ -15,24 +15,39 @@
       "source": "mvs://0?exposure_time=6000&gain=8&pixel_format=bgr8",
       "type": "mvs",
       "enabled": true,
-      "efficientad_model_path": "./models/cam_front.pt",
+      "patchcore_model_path": "./models/cam_front_patchcore.npz",
+      "color_insensitive_mode": true,
+      "detection": {
+        "model_path": "./models/yolo/best.pt",
+        "target_class": "seat",
+        "confidence": 0.25,
+        "iou": 0.45,
+        "device": "cuda",
+        "imgsz": 960
+      },
+      "patchcore": {
+        "backend": "full",
+        "image_size": 256,
+        "patch_size": 32,
+        "stride": 16,
+        "backbone_name": "wide_resnet50_2",
+        "feature_layers": ["layer2", "layer3"],
+        "backbone_pretrained": true,
+        "backbone_device": "cuda",
+        "texture_input": "lab_l"
+      },
+      "color_branch": {
+        "enabled": false
+      },
       "filter_classifier": {
         "enabled": true,
         "model_path": "./deployed_models/filter_classifier/",
         "device": "cuda",
         "confidence_threshold": 0.5
       },
-      "proposal": {
-        "heatmap_threshold_mode": "adaptive",
-        "max_proposals": 20
-      },
       "rule_engine": {
         "enabled": true,
         "deployed_rules_path": "./deployed_rules/rules.json"
-      },
-      "calibration": {
-        "normalizer_path": "./calibration/CAM_FRONT_normalizer.json",
-        "projector_path": "./calibration/projector.pt"
       }
     }
   ],

@@ -77,7 +77,7 @@ def test_site_report_collects_checks_and_restores_cwd(tmp_path: Path, monkeypatc
                     "enabled": True,
                     "watch_dir": "./input/CAM_A",
                     "pattern": "*.jpg",
-                    "efficientad_model_path": "./model.pt",
+                    "patchcore_model_path": "./model.pt",
                 }
             ],
             "line_signal": {"enabled": True, "type": "virtual"},
@@ -256,7 +256,7 @@ def test_site_report_camera_connect_only_skips_sample_grab(tmp_path: Path, monke
                     "enabled": True,
                     "watch_dir": "./input/CAM_A",
                     "pattern": "*.jpg",
-                    "efficientad_model_path": "./model.pt",
+                    "patchcore_model_path": "./model.pt",
                 }
             ],
             "line_signal": {"enabled": True, "type": "virtual"},
@@ -302,7 +302,7 @@ def test_site_report_can_skip_model_check(tmp_path: Path, monkeypatch, capsys) -
                     "type": "file_watcher",
                     "enabled": True,
                     "watch_dir": "./input/CAM_A",
-                    "efficientad_model_path": "./model.pt",
+                    "patchcore_model_path": "./model.pt",
                 }
             ],
             "line_signal": {"enabled": True, "type": "virtual"},
@@ -346,7 +346,7 @@ def test_site_report_passes_seat_model_id_to_model_check(tmp_path: Path, monkeyp
                     "type": "file_watcher",
                     "enabled": True,
                     "watch_dir": "./input/CAM_A",
-                    "efficientad_model_path": "./model.pt",
+                    "patchcore_model_path": "./model.pt",
                 }
             ],
             "line_signal": {"enabled": True, "type": "virtual"},
@@ -395,7 +395,7 @@ def test_site_report_marks_missing_deployment_evidence(tmp_path: Path, monkeypat
                     "type": "file_watcher",
                     "enabled": True,
                     "watch_dir": "./input/CAM_A",
-                    "efficientad_model_path": "./model.pt",
+                    "patchcore_model_path": "./model.pt",
                 }
             ],
             "line_signal": {"enabled": True, "type": "virtual"},

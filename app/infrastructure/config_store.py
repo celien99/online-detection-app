@@ -54,7 +54,7 @@ class ConfigStore:
             return node if node is not None else default
 
     def set(self, path: str, value: Any) -> None:
-        """在内存中设置值并标记 dirty（支持列表下标如 cameras.0.efficientad_model_path）。"""
+        """在内存中设置值并标记 dirty（支持列表下标如 cameras.0.patchcore_model_path）。"""
         with self._lock:
             parts = path.split(".")
             node = self._data
@@ -113,7 +113,7 @@ class ConfigStore:
         return list(self._dirty.keys())
 
     def get_value_by_path(self, path: str) -> str:
-        """按点号路径读取，返回 JSON 字符串（支持列表下标如 cameras.0.efficientad_model_path）。"""
+        """按点号路径读取，返回 JSON 字符串（支持列表下标如 cameras.0.patchcore_model_path）。"""
         import json as _json
         with self._lock:
             node: Any = self._data

@@ -7,9 +7,9 @@
 `seat_defect_core` 支持的能力：
 
 - 加载检测配置文件。
-- 加载训练好的 YOLO 分割模型和 EfficientAD 模型。
+- 加载训练好的 YOLO 分割模型和 PatchCore 模型。
 - 接收外部项目传入的多机位图像。
-- 执行 YOLO、ROI 对齐、EfficientAD 和多机位融合。
+- 执行 YOLO、ROI 对齐、PatchCore、region PatchCore、颜色分支和多机位融合。
 - 返回结构化检测结果、错误码、耗时和报告路径。
 
 `seat_defect_core` 不负责的能力：
@@ -20,42 +20,44 @@
 
 ## 安装和交付
 
-`seat_defect_core` 已将共享协议库（`defect_protocol`）嵌入为 `_protocol` 子模块，零外部 Python 包依赖。部署时只需安装 `seat_defect_core` 自身及其 PyPI 依赖。
-
-### 从源码安装
+推荐用 Python 包方式交付：
 
 ```bash
-pip install ./seat_defect_core
+pip install /path/to/seat_defect_core_package
 ```
 
-### 从预构建 wheel 安装
+LabVIEW 公共机推荐使用独立 Python 3.8.5 CPU 环境：
 
 ```bash
-cd seat_defect_core && python -m build -w
-pip install seat_defect_core/dist/seat_defect_core-*.whl
+conda create -n seat-defect-core-py38 python=3.8.5 -y
+conda activate seat-defect-core-py38
+pip install -r requirements-core-py38-cpu.txt
+pip install --no-build-isolation /path/to/seat_defect_core_package
 ```
 
-### 离线安装
+也可以在同一工程中通过源码方式使用，但需要保证：
 
-先在联网机器上准备 wheel：
+- Python 版本 `>=3.8.5`。
+- 依赖已安装并固定到公共机验证过的版本。CPU 运行时推荐使用 `requirements-core-py38-cpu.txt`。
+- `seat_defect_core` 能被 Python import 到。
+- 配置文件中的模型路径能被当前 Python 环境访问。
+- `output_json_path` 和 `debug_dir` 指向 LabVIEW 进程可写目录。
+
+不建议长期依赖手工复制目录作为正式交付方式。手工复制可以用于临时验证，但容易遗漏依赖、版本和包数据。
+
+离线安装时，先在可联网的 Python 3.8.5 机器上准备 wheel 缓存：
 
 ```bash
 python -m pip download --only-binary=:all: -r requirements-core-py38-cpu.txt -d wheelhouse
-python -m pip wheel --no-deps ./seat_defect_core -w wheelhouse
+python -m pip wheel --no-deps --no-build-isolation /path/to/seat_defect_core_package -w wheelhouse
 ```
 
-拷贝 `wheelhouse` 到目标机器后：
+拷贝 `wheelhouse` 到 LabVIEW 公共机后离线安装：
 
 ```bash
 python -m pip install --no-index --find-links wheelhouse -r requirements-core-py38-cpu.txt
 python -m pip install --no-index --find-links wheelhouse seat-defect-core
 ```
-
-### 开发时使用（monorepo 内）
-
-在 workspace 内直接 `uv sync --all-packages`，所有依赖自动解析。
-
-不建议长期依赖手工复制目录作为正式交付方式。手工复制可以用于临时验证，但容易遗漏依赖、版本和包数据。
 
 ## 最小调用示例
 
@@ -135,7 +137,8 @@ INI 用于兼容 LabVIEW 和现场工具，核心流程仍会先把 INI 转成�
 - `[seat_defect_inspection]`：顶层路径、开关、默认工件等字段
 - `[fusion]`：整件融合策略
 - `[camera.<camera_id>]`：顶层单机位
-- `[camera.<camera_id>.detection]`、`roi`、`roi.alignment`、`efficientad`、`filter_classifier`、`rule_engine`
+- `[camera.<camera_id>.detection]`、`roi`、`roi.alignment`、`patchcore`、`color_branch`
+- `[camera.<camera_id>.region.<region_id>]`：单机位局部区域
 - `[seat_model.<seat_model_id>]` 和 `[seat_model.<seat_model_id>.camera.<camera_id>]`：多型号配置
 
 示例：
@@ -160,7 +163,8 @@ INI 用于兼容 LabVIEW 和现场工具，核心流程仍会先把 INI 转成�
         "cameras": [
           {
             "camera_id": "cam_front",
-            "efficientad_model_path": "../models/seat_model_a/cam_front_efficientad.pt",
+            "patchcore_model_path": "../models/seat_model_a/cam_front_patchcore.npz",
+            "color_insensitive_mode": true,
             "detection": {
               "model_path": "../models/yolo/seat_model_a_best.pt",
               "target_class": "seat",
@@ -177,13 +181,23 @@ INI 用于兼容 LabVIEW 和现场工具，核心流程仍会先把 INI 转成�
                 "output_height": 256
               }
             },
-            "efficientad": {
-              "teacher_backbone": "wide_resnet50_2",
-              "student_backbone": "resnet18",
-              "device": "cpu",
-              "input_size": 256,
-              "min_valid_pixel_ratio": 0.3
-            }
+            "patchcore": {
+              "backend": "full",
+              "backbone_name": "wide_resnet50_2",
+              "feature_layers": ["layer2", "layer3"],
+              "backbone_pretrained": true,
+              "backbone_device": "cpu",
+              "texture_input": "lab_l",
+              "min_target_coverage": 0.6,
+              "min_valid_patch_ratio": 0.4
+            },
+            "regions": [
+              {
+                "region_id": "upper",
+                "box": [0.03, 0.03, 0.97, 0.42],
+                "patchcore_model_path": "../models/seat_model_a/cam_front_upper_patchcore.npz"
+              }
+            ]
           }
         ]
       }
@@ -192,72 +206,12 @@ INI 用于兼容 LabVIEW 和现场工具，核心流程仍会先把 INI 转成�
 }
 ```
 
-### Feature Calibration 配置
-
-在 `CameraConfig` 中增加 `calibration` 字段启用跨机位特征校准：
-
-```json
-{
-  "camera_id": "cam_front",
-  "calibration": {
-    "enabled": true,
-    "camera_norm": {
-      "enabled": true,
-      "stats_path": "./calibration/cam_front_norm_stats.npz"
-    },
-    "projection": {
-      "enabled": true,
-      "projector_path": "./calibration/projector.npz"
-    },
-    "whitening": {
-      "enabled": true,
-      "method": "zca",
-      "regularization": 0.0001,
-      "matrix_path": "./calibration/whitening_matrix.npz"
-    },
-    "ema_center": {
-      "enabled": true,
-      "alpha": 0.99,
-      "min_samples": 10,
-      "novelty_threshold": 0.3,
-      "centers_path": "./calibration/defect_centers.json"
-    }
-  }
-}
-```
-
-校准链路：`EAD features → CameraNormalizer (per-camera per-channel 标准化) → EmbeddingProjector (PCA 投影至 384-dim) → WhiteningTransform (ZCA 白化去相关) → UnifiedEmbedding`。
-
-### Cascading Budget 配置
-
-预算配置已内嵌于 `ProposalConfig` 的 `budget` 字段。如需启用两级预算（Proposal + Filter 级联），设置：
-
-```json
-{
-  "proposal": {
-    "budget": {
-      "enabled": true,
-      "scope": "proposal_and_filter",
-      "target_latency_ms": 15.0,
-      "hard_limit_ms": 20.0,
-      "max_cc_before_emergency": 50,
-      "avg_filter_latency_ms": 3.0,
-      "window_size": 100,
-      "threshold_multiplier_step": 0.5,
-      "threshold_multiplier_max": 3.0,
-      "recovery_rate": 0.01
-    }
-  }
-}
-```
-
-`CascadingBudgetController` 会根据剩余预算动态调度 Filter：`full` (全部推理) / `partial` (按优先级裁剪) / `skip_all` / `emergency` (紧急熔断)。
-
 生产环境建议：
 
 - `debug_artifacts_enabled` 设置为 `false`，避免保存大量调试图片拖慢检测。
 - `output_json_path` 和 `debug_dir` 放到外部项目可写目录。
-- `device` 根据现场硬件设为 `cpu`、`cuda:0` 或 `mps`。
+- `backbone_device` 根据现场硬件设为 `cpu`、`cuda:0` 或 `mps`。
+- 若现场不能联网下载 torchvision 权重，配置 `backbone_weights_path` 指向本地预训练权重，或提前准备 `.torch_cache`。
 
 ## 输入格式
 
@@ -334,16 +288,30 @@ dict frame 可选字段：
       "source": "/data/current/cam_front.png",
       "source_kind": "image_path",
       "status": "OK",
-      "reason": "all_checks_passed",
+      "reason": "all_regions_passed",
       "seat_model_id": "seat_model_a",
       "timings_ms": {
         "prepare": 30.0,
-        "anomaly": 80.0,
+        "split_regions": 1.0,
+        "region_patchcore_batch": 80.0,
         "debug_artifacts": 0.0,
         "total": 111.0
       },
       "error": null,
-      "artifact_paths": {}
+      "artifact_paths": {},
+      "region_results": [
+        {
+          "region_id": "upper",
+          "status": "OK",
+          "reason": "all_checks_passed",
+          "patchcore_model_path": "../models/seat_model_a/cam_front_upper_patchcore.npz",
+          "timings_ms": {
+            "patchcore": 80.0
+          },
+          "error": null,
+          "artifact_paths": {}
+        }
+      ]
     }
   ]
 }
@@ -358,10 +326,13 @@ dict frame 可选字段：
 常见 `reason`：
 
 - `all_checks_passed`
+- `all_regions_passed`
 - `texture_anomaly`
+- `region_texture_anomaly:<region_id>`
+- `color_anomaly`
 - `target_not_found`
 - `target_mask_missing`
-- `low_valid_pixel_ratio`
+- `low_valid_patch_ratio`
 - `missing_external_frame`
 - `image_read_failed`
 - `pipeline_failed`
@@ -385,14 +356,10 @@ dict frame 可选字段：
 1. YOLO 检测目标座椅。
 2. 根据分割 mask 做 ROI 裁剪和对齐。
 3. 做图像质量检查。
-4. 执行完整 ROI EfficientAD 纹理异常检测。
-5. 异常帧进入 Feature Calibration（Normalize → Project → Whiten → EMA Center）。
-6. Proposal 生成 defect patch 候选。
-8. Identity Linking 跨帧关联。
-9. Cascading Budget 调度 Filter 推理（full/partial/skip_all/emergency）。
-10. Filter Classifier 三模态推理 + Proposal Aggregation。
-11. 规则引擎后处理。
-12. 汇总单机位结果。
+4. 如果未配置 regions，执行完整 ROI PatchCore。
+5. 如果配置了 regions，切分标准 ROI 并执行 region PatchCore。
+6. 可选执行颜色一致性分支。
+7. 汇总单机位结果。
 
 多机位流程：
 
@@ -401,15 +368,27 @@ dict frame 可选字段：
 3. 按 fusion 配置汇总整件状态。
 4. 写出 latest report。
 
+## region 模式性能注意事项
+
+region 模式会对一个机位内多个局部区域分别运行 PatchCore，因此天然比完整 ROI 单模型更慢。当前 core 已做以下优化：
+
+- 相同 full-backend 配置共享 torch feature extractor。
+- 相同 full-backend 配置的多个 region 使用 batch backbone 前向。
+- 调试产物可通过 `debug_artifacts_enabled=false` 关闭。
+- region 调试产物复用运行时已有 region sample，避免重复切图。
+
+这些优化不会改变 ROI、region box、memory bank、阈值或最终判定规则，只可能带来极小的浮点差异。
+
 ## 模型和配置一致性
 
-EfficientAD 模型中保存了训练时的上游 pipeline signature。运行时如果修改了会影响 ROI 或特征输入的关键配置，core 会拒绝使用旧模型，并提示重新训练。
+PatchCore 模型中保存了训练时的上游 pipeline signature。运行时如果修改了会影响 ROI 或特征输入的关键配置，core 会拒绝使用旧模型，并提示重新训练。
 
-常见需要重新训练 EfficientAD 的改动：
+常见需要重新训练 PatchCore 的改动：
 
 - YOLO 模型路径或目标类别发生变化。
 - ROI 裁剪、mask、alignment 配置变化。
-- EfficientAD 的 backbone、image_size、teacher/student 或 feature_layers 变化。
+- region box 变化。
+- PatchCore backend、image_size、texture_input、backbone 或 feature_layers 变化。
 
 运行时可以调整部分判定阈值类配置，但不能用配置去掩盖训练数据不足的问题。
 
@@ -426,161 +405,10 @@ EfficientAD 模型中保存了训练时的上游 pipeline signature。运行时�
 当速度偏慢时，优先检查：
 
 1. `debug_artifacts_enabled` 是否为 `false`。
-2. `timings_ms.cameras` 和各机位 `timings_ms.anomaly`。
-3. `device` 是否符合现场硬件。
+2. `timings_ms.cameras` 和单机位 `timings_ms.region_patchcore_batch`。
+3. region 数量是否过多。
+4. `backbone_device` 是否符合现场硬件。
 5. 是否每次请求都重新创建 `SeatDefectInspector`。
-
-## 最佳检测效果配置
-
-要发挥 `seat_defect_core` 最强检测效果，需同时启用以下特性：
-
-| 特性 | 作用 | 效果提升 |
-|------|------|----------|
-| **Calibration** | 跨机位特征校准（Normalize→Project→Whiten） | 消除机位间特征分布差异，Filter Classifier 跨机位泛化能力提升 |
-| **Cascading Budget** | 自适应提案+过滤预算调度 | 保证实时性（<20ms/帧），同时在正常帧上做完整推理 |
-| **Tracking** | 缺陷跨帧身份关联（IoU+Kalman+Cosine） | 消除单帧误报，Mature 缺陷自动升级告警等级 |
-| **Filter Classifier** | 三模态（图像+EAD特征+统一嵌入）误报抑制 | 误报率降低 50-80% |
-| **Rule Engine** | 知识库规则后处理 | 针对已知缺陷类型/机位做定向压制或升级 |
-| **Proposal Aggregation** | 加权置信度 ROI 级聚合 | 多 patch 联合判定，避免碎片化误检 |
-
-### 推荐配置文件
-
-使用 `config.best.json`（位于 seat_defect_core 目录）作为起点，按现场环境调整设备（`cpu`/`cuda`/`mps`）和模型路径。
-
-### 特性启用顺序
-
-1. **基础链路**：YOLO + EfficientAD（必须，最小可用）
-2. **精度提升**：Filter Classifier + Rule Engine
-3. **鲁棒性提升**：Calibration + Tracking + Proposal Aggregation
-4. **性能保障**：Cascading Budget（实时性要求高时启用）
-
-### 关键参数调优指南
-
-#### EfficientAD 阈值
-
-训练完成后自动计算 `image_threshold`（正常图像 anomaly score 的 99.7% 分位数）。现场调优时：
-
-- **漏检多**：降低 `image_threshold`（当前值 × 0.7-0.8）
-- **误报多**：提高 `image_threshold`（当前值 × 1.2-1.5）
-- 阈值保存在模型 `.meta.json` 中，修改后重新加载即可生效
-
-#### Filter Classifier 置信度
-
-- `confidence_threshold: 0.5` 为平衡点
-- 产线容忍误报率低时提高到 `0.7-0.8`
-- 产线不容忍漏检时降低到 `0.3-0.4`
-
-#### Cascading Budget 延迟目标
-
-- `target_latency_ms: 15.0` 适合大多数产线节拍
-- 高速产线（<100ms/件）设 `target_latency_ms: 8.0`, `hard_limit_ms: 12.0`
-- 低速产线（>500ms/件）可关闭 budget 做完整推理
-
-#### Calibration 数据准备
-
-Calibration 需要离线拟合参数，训练脚本位于 `ml/alignment/trainer.py`：
-
-1. 收集各机位正常图像 100+ 张
-2. 用已训练的 EfficientAD 模型提取特征
-3. 运行 AlignmentTrainer 拟合 CameraNormalizer + Projector + Whitening
-4. 将输出的 `.npz` 文件路径填入 calibration 配置
-
-## 训练工作流
-
-### 准备训练数据
-
-按机位组织正常图像，每个机位一个 `good/` 目录：
-
-```
-training_data/
-  cam_back/
-    good/        # 正常图像（各 50-200 张）
-      0001.jpg
-      0002.jpg
-      ...
-  cam_front/
-    good/
-      0001.jpg
-      0002.jpg
-      ...
-  cam_left/
-    good/
-      ...
-```
-
-**数据要求：**
-- 只包含正常（无缺陷）座椅图像
-- 覆盖产线正常波动（光照变化、座椅颜色/材质差异、轻微位置偏移）
-- 每个机位至少 50 张，推荐 100-200 张
-- 图像应为 ROI 对齐后的裁剪（256×256 或与 `input_size` 一致）
-
-### 单机位训练
-
-```bash
-python -m seat_defect_core train-efficientad \
-  --config config.best.json \
-  --camera-id cam_back \
-  --good-images ./training_data/cam_back/good/ \
-  --output ./models/seat_model_a/cam_back_efficientad.pt
-```
-
-### 批量训练全部机位
-
-```bash
-# 预览训练计划（不实际执行）
-python -m seat_defect_core batch-train \
-  --config config.best.json \
-  --good-images-root ./training_data/ \
-  --output-root ./models/seat_model_a/ \
-  --dry-run
-
-# 执行训练
-python -m seat_defect_core batch-train \
-  --config config.best.json \
-  --good-images-root ./training_data/ \
-  --output-root ./models/seat_model_a/
-
-# 仅训练指定机位
-python -m seat_defect_core batch-train \
-  --config config.best.json \
-  --good-images-root ./training_data/ \
-  --output-root ./models/seat_model_a/ \
-  --cameras cam_back,cam_front
-```
-
-### 训练流程
-
-1. 自动将图像转换为 MVTec 格式
-2. 划分训练集/阈值计算集（90/10）
-3. 使用 anomalib `EfficientAd(teacher_out_channels=384, model_size="medium")` 训练
-4. 在阈值集上计算 anomaly score 的 99.7% 分位数作为 `image_threshold`
-5. 导出 TorchScript `.pt` 模型 + `.meta.json` 阈值元数据
-6. 记录 MLflow 实验（params/metrics/artifacts）
-
-### 训练参数建议
-
-| 参数 | 推荐值 | 说明 |
-|------|--------|------|
-| `epochs` | 200 | 更多轮数有利于 teacher-student 收敛 |
-| `batch_size` | 16 | GPU 显存充足可设 32 |
-| `learning_rate` | 1e-4 | EfficientAD 官方推荐 |
-| `validation_split` | 0.1 | 10% 用于阈值计算 |
-| `early_stopping_patience` | 20 | 避免过拟合 |
-
-## 生产部署检查清单
-
-- [ ] `debug_artifacts_enabled` 设为 `false`
-- [ ] 所有 `device` 字段与现场硬件一致（`cpu`/`cuda`/`mps`）
-- [ ] YOLO 模型路径和分类名确认正确
-- [ ] 每个机位的 EfficientAD 模型已训练并路径正确
-- [ ] Filter Classifier 已部署且路径正确
-- [ ] 规则引擎 deployed_rules_path 指向最新部署规则
-- [ ] Calibration `.npz` 文件已拟合并路径正确
-- [ ] `upload_base_url` 指向正确的离线平台后端
-- [ ] 使用 `SeatDefectInspector` 单例，避免重复加载模型
-- [ ] 预热调用 `inspector.warmup()` 在首次检测前执行
-- [ ] 固定依赖版本（torch, torchvision, anomalib, ultralytics）
-- [ ] 离线样本集回归验证通过
 
 ## 版本稳定性建议
 
@@ -589,9 +417,9 @@ python -m seat_defect_core batch-train \
 - `seat-defect-core` 包版本。
 - 配置文件版本。
 - YOLO 模型文件。
-- EfficientAD 模型文件。
+- PatchCore 模型文件。
 - Python、torch、torchvision、ultralytics 版本。
 
-LabVIEW 公共机建议固定 Python `3.8.5`，使用 CPU 版依赖，并在配置中设置 `device = cpu`。如果后续改用 GPU/CUDA，需要单独验证对应的 torch、torchvision 和驱动版本。
+LabVIEW 公共机建议固定 Python `3.8.5`，使用 CPU 版依赖，并在配置中设置 `backbone_device = cpu`。如果后续改用 GPU/CUDA，需要单独验证对应的 torch、torchvision 和驱动版本。
 
 上线后不要直接替换模型或配置。任何模型或 ROI 配置调整，都应先在离线样本集上回归验证。

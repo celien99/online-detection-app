@@ -20,7 +20,7 @@ def _template() -> dict:
                 "source": "mvs://0",
                 "type": "mvs",
                 "enabled": True,
-                "efficientad_model_path": "./models/cam_front.pt",
+                "patchcore_model_path": "./models/cam_front.pt",
             }
         ],
         "line_signal": {

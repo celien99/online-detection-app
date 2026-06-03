@@ -27,7 +27,7 @@
 ## 功能特性
 
 - **多相机实时采集** — 支持 Hikrobot MVS 工业相机、RTSP/RTMP 网络流、本地文件监听三种输入模式
-- **ML 缺陷检测** — YOLO 区域分割 → EfficientAD 纹理异常检测 → Filter Classifier 误检过滤 → Rule Engine 后处理
+- **ML 缺陷检测** — YOLO 区域分割 → PatchCore 纹理异常检测 → Filter Classifier 误检过滤 → Rule Engine 后处理
 - **PLC 联动控制** — Modbus TCP 协议下发缺陷/停线信号，支持产线自动化闭环
 - **多座位模型管理** — 按车型/座位切换相机配置与模型文件，一键部署远端的模型
 - **NG 弹窗与告警** — 实时缺陷弹窗、热力图叠加、超时自动确认、声音告警
@@ -39,10 +39,7 @@
 ## 检测管线
 
 ```
-CameraFrame → YOLO Segmentation → ROI Crop/Align → EfficientAD (Texture Anomaly)
-                                                                    ↓
-                                                          Feature Calibration
-                                                           (Normalize/Project/Whiten)
+CameraFrame → YOLO Segmentation → ROI Crop/Align → PatchCore (Texture Anomaly)
                                                                     ↓
                                                              Filter Classifier
                                                             (False-Positive Suppression)
@@ -59,7 +56,7 @@ CameraFrame → YOLO Segmentation → ROI Crop/Align → EfficientAD (Texture An
 | 运行时        | Python 3.11 / 3.12                  |
 | UI 框架       | PySide6 (Qt 6.6+), QML              |
 | 计算机视觉    | OpenCV, NumPy                       |
-| ML 推理       | PyTorch (YOLO, EfficientAD)         |
+| ML 推理       | PyTorch (YOLO, PatchCore)         |
 | 工业通信      | pymodbus (Modbus TCP)               |
 | 日志          | structlog + SQLite                  |
 | 环境管理      | Windows: conda；其他系统: uv        |
@@ -174,7 +171,7 @@ OnlineDetectionConfigWizard.exe --template config.production.example.json --outp
 - `line_signal.enabled=true`，`line_signal.type=modbus`，PLC 点位按现场点表填写。
 - `cameras[].source` 使用序列号绑定，例如 `mvs://sn/<SN>?trigger=hardware&trigger_source=Line0&trigger_activation=rising_edge&timeout_ms=2000&exposure_time=6000&gain=8&pixel_format=bgr8`。
 - 多相机时，每个 `camera_id` 对应一个真实 SN；不要在生产环境依赖 `mvs://0` 这类枚举顺序。
-- 模型、规则、标定文件放到 `models\`、`deployed_models\`、`deployed_rules\`、`calibration\` 等配置指向的目录。
+- PatchCore、YOLO、Filter 分类器和规则文件放到 `models\`、`deployed_models\`、`deployed_rules\` 等配置指向的目录。
 
 #### 2. 安装或打包
 
@@ -301,7 +298,7 @@ OnlineDetectionApp.exe
     "source": "mvs://0?exposure_time=6000&gain=8",
     "type": "mvs",             // mvs | rtsp | file_watcher
     "enabled": true,
-    "efficientad_model_path": "./models/cam_front.pt",
+    "patchcore_model_path": "./models/cam_front_patchcore.npz",
     "filter_classifier": {
       "enabled": true,
       "model_path": "./deployed_models/filter_classifier/",
@@ -412,10 +409,8 @@ online-detection-app/
 ├── seat_defect_core/             # ML 推理核心库
 │   ├── api.py                    # SeatDefectInspector 主入口
 │   ├── yolo/                     # YOLO 分割模块
-│   ├── efficientad/              # EfficientAD 异常检测模块
-│   ├── calibration/              # 特征校准 (Normalize/Project/Whiten)
+│   ├── patchcore/                # PatchCore 异常检测模块
 │   ├── classifier/               # Filter Classifier 误检过滤
-│   ├── proposal/                 # 候选区域生成
 │   ├── rule_engine.py            # 规则引擎后处理
 │   ├── fusion.py                 # 多相机结果融合
 │   └── training/                 # 训练脚本 & 工具

@@ -134,7 +134,7 @@ Rectangle {
             }
             ComboBox {
                 id: typeFilter
-                model: [qsTr("全部类型"), "efficientad", "filter_classifier", "calibration_normalizer", "calibration_projector"]
+                model: [qsTr("全部类型"), "patchcore", "filter_classifier", "rules"]
                 onCurrentTextChanged: {
                     if (modelDeployScreen.viewModel) modelDeployScreen.viewModel.setFilterType(
                         currentIndex === 0 ? "" : currentText
@@ -320,7 +320,7 @@ Rectangle {
                     contentItem: ColumnLayout {
                         spacing: 2
                         Repeater {
-                            model: ["efficientad", "filter_classifier", "calibration_normalizer", "calibration_projector"]
+                            model: ["patchcore", "filter_classifier", "rules"]
                             delegate: Rectangle {
                                 Layout.fillWidth: true
                                 implicitHeight: 34
@@ -354,7 +354,7 @@ Rectangle {
                 ComboBox {
                     id: importTypeCombo
                     visible: false
-                    model: ["efficientad", "filter_classifier", "calibration_normalizer", "calibration_projector"]
+                    model: ["patchcore", "filter_classifier", "rules"]
                     currentIndex: 0
                 }
             }

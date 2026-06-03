@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..calibration import CalibrationConfig, CalibrationRegistry
+import numpy as np
+
 from ..classifier.engine import FilterClassifierService
-from ..config import CameraConfig, InspectionConfig
+from ..config import CameraConfig, FilterClassifierConfig, InspectionConfig, PatchCoreConfig, RegionConfig
 from ..cvops import ImageQualityGuard, RoiRefineEngine
-from ..efficientad import EfficientADService
+from ..patchcore.features import _TorchPatchFeatureExtractor
+from ..patchcore import LoadedModelBundle, PatchCoreService
 from ..core_types import DetectionResult, ImageQualityDecision, RoiRefineResult, TextureAnomalyResult
 from ..yolo import DetectionService
 
@@ -100,36 +103,8 @@ class InspectionService:
     def __init__(self, config: InspectionConfig) -> None:
         self.config = config
         self._pipeline_cache: Dict[str, Dict[str, CameraPipeline]] = {}
-        self._model_cache = AnomalyModelCache(self)
-        self._anomaly_predictor = EfficientADPredictor()
-        self._trackers: Dict[str, Any] = {}
-        self._calibration_registry = self._init_calibration()
-
-    def _init_calibration(self) -> Optional[CalibrationRegistry]:
-        """从配置中初始化 CalibrationRegistry，合并顶层 calibration 和 per-camera normalizer 路径。"""
-        all_cameras: list[CameraConfig] = list(self.config.cameras)
-        for seat_model in self.config.seat_models:
-            all_cameras.extend(seat_model.cameras)
-
-        # 以顶层 calibration 为基础，浅拷贝 camera_norm_paths 避免污染原配置
-        if self.config.calibration is not None:
-            cal_cfg = self.config.calibration
-            cal_cfg.camera_norm_paths = dict(cal_cfg.camera_norm_paths)
-        else:
-            cal_cfg = CalibrationConfig()
-
-        # 收集所有 per-camera normalizer 路径
-        for camera in all_cameras:
-            if camera.calibration is not None:
-                stats_path = camera.calibration.camera_norm.stats_path
-                if stats_path:
-                    cal_cfg.camera_norm_paths[camera.camera_id] = stats_path
-
-        return CalibrationRegistry(cal_cfg)
-
-    @property
-    def calibration(self) -> Optional[CalibrationRegistry]:
-        return self._calibration_registry
+        self._model_cache = ModelBundleCache(self)
+        self._patchcore_predictor = PatchCorePredictorPool()
 
     def resolve_context(self, seat_model_id: Optional[str]) -> ResolvedInspectionContext:
         resolved_seat_model_id, cameras = self._resolve_active_cameras(seat_model_id)
@@ -149,7 +124,7 @@ class InspectionService:
 
     def _resolve_active_cameras(self, seat_model_id: Optional[str]) -> Tuple[Optional[str], List[CameraConfig]]:
         if self.config.seat_models:
-            resolved_seat_model_id: Optional[str] = (
+            resolved_seat_model_id = (
                 seat_model_id
                 or self.config.default_seat_model_id
                 or self.config.seat_models[0].seat_model_id
@@ -166,64 +141,156 @@ class InspectionService:
         resolved_seat_model_id = seat_model_id or self.config.default_seat_model_id
         return resolved_seat_model_id, [camera for camera in self.config.cameras if camera.enabled]
 
+    def resolve_patchcore_config(
+        self,
+        camera: CameraConfig,
+        region: Optional[RegionConfig] = None,
+    ) -> PatchCoreConfig:
+        patchcore_config = region.patchcore if region is not None and region.patchcore is not None else camera.patchcore
+        if (
+            camera.color_insensitive_mode
+            and patchcore_config.texture_input.strip().lower() not in {"gray", "lab_l"}
+        ):
+            patchcore_config = replace(patchcore_config, texture_input="lab_l")
+        return patchcore_config
+
     def load_model_bundle(
         self,
         camera: CameraConfig,
         seat_model_id: Optional[str],
-    ) -> EfficientADService:
+    ) -> LoadedModelBundle:
         return self._model_cache.load_camera_bundle(camera, seat_model_id)
+
+    def load_region_model_bundle(
+        self,
+        camera: CameraConfig,
+        region: RegionConfig,
+        seat_model_id: Optional[str],
+    ) -> LoadedModelBundle:
+        return self._model_cache.load_region_bundle(camera, region, seat_model_id)
 
     def load_filter_classifier(
         self,
         camera: CameraConfig,
         seat_model_id: Optional[str],
     ) -> Optional[FilterClassifierService]:
+        """加载过滤器分类器模型（带缓存）。"""
         return self._model_cache.load_filter_classifier(camera, seat_model_id)
 
-    def predict_anomaly_batch(
+    def prepare_patchcore_for_predict(self, patchcore: Any) -> None:
+        """Attach shared runtime resources just before PatchCore prediction."""
+        self._patchcore_predictor.prepare(patchcore)
+
+    def predict_patchcore_batch(
         self,
-        items: List[Tuple[EfficientADService, Any, Any, Any]],
+        items: List[Tuple[PatchCoreService, Any, Any, Any]],
     ) -> List[TextureAnomalyResult]:
-        """Predict anomaly results, one model at a time."""
-        return self._anomaly_predictor.predict_batch(items)
+        """Predict PatchCore results, batching full-backend items with matching features."""
+        return self._patchcore_predictor.predict_batch(items)
 
     def warmup(self, seat_model_id: Optional[str] = None) -> None:
-        """Preload all models (detection, EfficientAD, filter classifier)."""
+        """Preload active YOLO, PatchCore bundles, and full-backend backbones."""
         context = self.resolve_context(seat_model_id)
+        patchcore_items: List[Tuple[PatchCoreService, Any, Any, Any]] = []
         for camera in context.cameras:
             pipeline = context.pipelines[camera.camera_id]
             pipeline.detection_service.warmup()
-            self.load_model_bundle(camera, context.seat_model_id)
+            active_regions = [region for region in camera.regions if region.enabled]
+            if active_regions:
+                for region in active_regions:
+                    model_bundle = self.load_region_model_bundle(
+                        camera,
+                        region,
+                        context.seat_model_id,
+                    )
+                    patchcore_config = self.resolve_patchcore_config(camera, region)
+                    patchcore_items.append(
+                        (
+                            model_bundle.patchcore,
+                            *_dummy_patchcore_sample(patchcore_config),
+                        )
+                    )
+                if camera.color_branch.enabled and not camera.color_insensitive_mode:
+                    self.load_model_bundle(camera, context.seat_model_id)
+                continue
+
+            model_bundle = self.load_model_bundle(camera, context.seat_model_id)
+            patchcore_config = self.resolve_patchcore_config(camera)
+            patchcore_items.append(
+                (
+                    model_bundle.patchcore,
+                    *_dummy_patchcore_sample(patchcore_config),
+                )
+            )
+
+        if patchcore_items:
+            self.predict_patchcore_batch(patchcore_items)
+
+        # 预热过滤器分类器：预先加载模型触发 JIT 编译
+        for camera in context.cameras:
             if camera.filter_classifier.enabled and camera.filter_classifier.model_path:
                 self.load_filter_classifier(camera, context.seat_model_id)
 
 
-class AnomalyModelCache:
-    """Load and cache EfficientAD models by model file."""
+class ModelBundleCache:
+    """Load and cache PatchCore bundles by model file."""
 
     def __init__(self, service: InspectionService) -> None:
         self._service = service
-        self._cache: Dict[Tuple[str, str, str, int], EfficientADService] = {}
+        self._cache: Dict[Tuple[str, str, str, int], LoadedModelBundle] = {}
         self._filter_cache: Dict[Tuple[str, str, str, int], FilterClassifierService] = {}
 
     def load_camera_bundle(
         self,
         camera: CameraConfig,
         seat_model_id: Optional[str],
-    ) -> EfficientADService:
+    ) -> LoadedModelBundle:
         cache_key = self._cache_key(
             seat_model_id=seat_model_id,
             camera_id=camera.camera_id,
             model_id="__full__",
-            model_path=camera.efficientad_model_path,
+            model_path=camera.patchcore_model_path,
         )
         bundle = self._cache.get(cache_key)
         if bundle is not None:
             return bundle
 
-        efficientad_config = camera.efficientad
-        efficientad_config.model_path = camera.efficientad_model_path
-        loaded = EfficientADService(efficientad_config)
+        loaded = PatchCoreService.load_bundle(
+            camera.patchcore_model_path,
+            runtime_config=self._service.resolve_patchcore_config(camera),
+        )
+        if (
+            camera.color_branch.enabled
+            and not camera.color_insensitive_mode
+            and loaded.color_profile is None
+        ):
+            raise RuntimeError(
+                f"机位 `{camera.camera_id}` 已启用颜色分支，但模型包缺少颜色参考分布。"
+                " 请重新执行 train-patchcore，或关闭颜色分支 / 启用 color_insensitive_mode。"
+            )
+        self._cache[cache_key] = loaded
+        return loaded
+
+    def load_region_bundle(
+        self,
+        camera: CameraConfig,
+        region: RegionConfig,
+        seat_model_id: Optional[str],
+    ) -> LoadedModelBundle:
+        cache_key = self._cache_key(
+            seat_model_id=seat_model_id,
+            camera_id=camera.camera_id,
+            model_id=region.region_id,
+            model_path=region.patchcore_model_path,
+        )
+        bundle = self._cache.get(cache_key)
+        if bundle is not None:
+            return bundle
+
+        loaded = PatchCoreService.load_bundle(
+            region.patchcore_model_path,
+            runtime_config=self._service.resolve_patchcore_config(camera, region),
+        )
         self._cache[cache_key] = loaded
         return loaded
 
@@ -243,15 +310,7 @@ class AnomalyModelCache:
         model_path = camera.filter_classifier.model_path
         if not model_path:
             return None
-        # 解析 model_path：目录自动发现 model.pt，或直接使用文件路径
-        path = Path(model_path)
-        if path.is_dir():
-            candidate = path / "model.pt"
-            resolved = str(candidate) if candidate.is_file() else None
-        elif path.is_file():
-            resolved = str(path)
-        else:
-            resolved = None
+        resolved = _resolve_model_file(model_path)
         if resolved is None:
             return None
         cache_key = self._cache_key(
@@ -293,15 +352,123 @@ class AnomalyModelCache:
         )
 
 
-class EfficientADPredictor:
-    """Predict anomaly results, one model at a time."""
+class PatchCorePredictorPool:
+    """Share full-backend feature extractors and batch compatible predictions."""
+
+    def __init__(self) -> None:
+        self._feature_extractor_cache: Dict[str, _TorchPatchFeatureExtractor] = {}
+
+    def prepare(self, patchcore: Any) -> None:
+        if not isinstance(patchcore, PatchCoreService):
+            return
+        self._attach_shared_feature_extractor(patchcore)
 
     def predict_batch(
         self,
-        items: List[Tuple[EfficientADService, Any, Any, Any]],
+        items: List[Tuple[PatchCoreService, Any, Any, Any]],
     ) -> List[TextureAnomalyResult]:
-        """Predict anomaly results for each item independently."""
-        return [
-            service.predict(image, target_mask, ignore_mask)
-            for service, image, target_mask, ignore_mask in items
-        ]
+        results: List[Optional[TextureAnomalyResult]] = [None] * len(items)
+        batch_groups: Dict[str, List[Tuple[int, PatchCoreService, Any, Any, Any]]] = {}
+        for index, (patchcore, image, target_mask, ignore_mask) in enumerate(items):
+            if not isinstance(patchcore, PatchCoreService):
+                results[index] = patchcore.predict(image, target_mask, ignore_mask)
+                continue
+            self.prepare(patchcore)
+            if patchcore.config.backend.strip().lower() != "full":
+                results[index] = patchcore.predict(image, target_mask, ignore_mask)
+                continue
+            cache_key = _feature_extractor_cache_key(patchcore.config)
+            batch_groups.setdefault(cache_key, []).append(
+                (index, patchcore, image, target_mask, ignore_mask),
+            )
+
+        for group in batch_groups.values():
+            if len(group) == 1:
+                index, patchcore, image, target_mask, ignore_mask = group[0]
+                results[index] = patchcore.predict(image, target_mask, ignore_mask)
+                continue
+            feature_extractor = group[0][1]._get_torch_feature_extractor()
+            if feature_extractor is None:
+                for index, patchcore, image, target_mask, ignore_mask in group:
+                    results[index] = patchcore.predict(image, target_mask, ignore_mask)
+                continue
+            extracted = feature_extractor.extract_many(
+                [
+                    (image, target_mask, ignore_mask)
+                    for _index, _patchcore, image, target_mask, ignore_mask in group
+                ]
+            )
+            for (index, patchcore, image, target_mask, _ignore_mask), (embeddings, batch) in zip(group, extracted):
+                results[index] = patchcore.predict_from_embeddings(
+                    image_shape=image.shape[:2],
+                    target_mask=target_mask,
+                    embeddings=embeddings,
+                    batch=batch,
+                )
+
+        missing_results = [index for index, result in enumerate(results) if result is None]
+        if missing_results:
+            raise RuntimeError(f"PatchCore batch prediction missed results: {missing_results}")
+        return [result for result in results if result is not None]
+
+    def _attach_shared_feature_extractor(self, patchcore: PatchCoreService) -> None:
+        """Share identical full-backend backbones across camera and region models."""
+        if patchcore.config.backend.strip().lower() != "full":
+            return
+        cache_key = _feature_extractor_cache_key(patchcore.config)
+        feature_extractor = self._feature_extractor_cache.get(cache_key)
+        if feature_extractor is None:
+            feature_extractor = _TorchPatchFeatureExtractor(patchcore.config)
+            self._feature_extractor_cache[cache_key] = feature_extractor
+        patchcore.set_feature_extractor(feature_extractor)
+
+
+def _feature_extractor_cache_key(config: PatchCoreConfig) -> str:
+    """Key only the settings that affect full-backend feature extraction."""
+    payload = {
+        "backend": config.backend.strip().lower(),
+        "image_size": int(config.image_size),
+        "texture_input": config.texture_input.strip().lower(),
+        "backbone_name": config.backbone_name.strip().lower(),
+        "feature_layers": [layer.strip() for layer in config.feature_layers if layer.strip()],
+        "backbone_pretrained": bool(config.backbone_pretrained),
+        "backbone_weights_path": str(Path(config.backbone_weights_path).resolve())
+        if config.backbone_weights_path
+        else None,
+        "backbone_device": config.backbone_device.strip().lower(),
+        "feature_pool_kernel_size": int(config.feature_pool_kernel_size),
+        "min_target_coverage": float(config.min_target_coverage),
+        "max_ignore_overlap": float(config.max_ignore_overlap),
+    }
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+
+
+def _dummy_patchcore_sample(config: PatchCoreConfig) -> Tuple[Any, Any, Any]:
+    image_size = max(1, int(config.image_size))
+    image = np.zeros((image_size, image_size, 4), dtype=np.uint8)
+    image[:, :, 3] = 255
+    target_mask = np.ones((image_size, image_size), dtype=np.uint8)
+    ignore_mask = np.zeros((image_size, image_size), dtype=np.uint8)
+    return image, target_mask, ignore_mask
+
+
+def _resolve_model_file(model_path: str) -> Optional[str]:
+    """将 model_path 解析为实际 .pt 文件路径。
+
+    如果 model_path 是目录，自动发现目录中的 model.pt；
+    如果 model_path 是文件，直接返回。
+    """
+    path = Path(model_path)
+    if path.is_dir():
+        candidate = path / "model.pt"
+        if candidate.is_file():
+            return str(candidate)
+        return None
+    if path.is_file():
+        return str(path)
+    return None

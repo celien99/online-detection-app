@@ -60,14 +60,10 @@ class SeatModelService:
                 "source": cam["source"],
                 "type": cam["type"],
                 "enabled": bool(cam["enabled"]),
-                "efficientad_model_path": cam.get("efficientad_model_path", ""),
+                "patchcore_model_path": cam.get("patchcore_model_path", ""),
                 "filter_classifier": {
                     "enabled": bool(cam.get("filter_classifier_enabled", False)),
                     "model_path": cam.get("filter_classifier_path", ""),
-                },
-                "calibration": {
-                    "normalizer_path": cam.get("calibration_normalizer", ""),
-                    "projector_path": cam.get("calibration_projector", ""),
                 },
             }
             result.append(entry)

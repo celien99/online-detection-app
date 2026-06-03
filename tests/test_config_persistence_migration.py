@@ -17,16 +17,15 @@ def test_migrate_cameras_from_json(tmp_path: Path):
                 "type": "mvs",
                 "source": "mvs://1",
                 "enabled": True,
-                "efficientad_model_path": "./models/a.pt",
+                "patchcore_model_path": "./models/a.pt",
                 "filter_classifier": {"enabled": True, "model_path": "./fc/a/"},
-                "calibration": {"normalizer_path": "./cal/a_norm.json", "projector_path": "./cal/proj.pt"},
             },
             {
                 "camera_id": "CAM_B",
                 "type": "rtsp",
                 "source": "rtsp://10.0.0.1/stream",
                 "enabled": False,
-                "efficientad_model_path": "",
+                "patchcore_model_path": "",
             },
         ]
     }), encoding="utf-8")
@@ -40,13 +39,11 @@ def test_migrate_cameras_from_json(tmp_path: Path):
     cam_a = svc.get_camera("CAM_A")
     assert cam_a is not None
     assert cam_a["type"] == "mvs"
-    assert cam_a["efficientad_model_path"] == "./models/a.pt"
+    assert cam_a["patchcore_model_path"] == "./models/a.pt"
     assert cam_a["filter_classifier_path"] == "./fc/a/"
     assert cam_a["filter_classifier_enabled"] == 1
-    assert cam_a["calibration_normalizer"] == "./cal/a_norm.json"
-    assert cam_a["calibration_projector"] == "./cal/proj.pt"
 
     cam_b = svc.get_camera("CAM_B")
     assert cam_b is not None
     assert cam_b["enabled"] == 0
-    assert cam_b["efficientad_model_path"] == ""
+    assert cam_b["patchcore_model_path"] == ""

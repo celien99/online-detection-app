@@ -5,11 +5,14 @@ from __future__ import annotations
 import configparser
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 _INI_SUFFIXES = {".ini", ".cfg"}
 _LIST_KEYS = {"box", "debug_artifact_names", "feature_layers"}
 _BOOL_KEYS = {
+    "backbone_pretrained",
+    "cache",
+    "color_insensitive_mode",
     "debug_artifacts_enabled",
     "defect_overrides_reject",
     "enabled",
@@ -165,11 +168,14 @@ def _apply_camera_rest(
             )
         )
         return
-    if rest[0] in {"quality", "detection", "efficientad", "filter_classifier", "rule_engine"} and len(rest) == 1:
+    if rest[0] in {"quality", "detection", "patchcore", "color_branch", "filter_classifier", "rule_engine"} and len(rest) == 1:
         camera.setdefault(rest[0], {}).update(items)
         return
     if rest[0] == "roi":
         _apply_roi_section(camera, rest[1:], items, config_path)
+        return
+    if rest[0] in {"region", "regions"}:
+        _apply_region_section(camera, rest[1:], items, config_path)
         return
     raise ValueError(f"INI camera section 不受支持 `{'.'.join(['camera', camera_id, *rest])}`：{config_path}")
 
@@ -188,6 +194,39 @@ def _apply_roi_section(
         roi.setdefault("alignment", {}).update(items)
         return
     raise ValueError(f"INI roi section 不受支持：{config_path}")
+
+
+def _apply_region_section(
+    camera: Dict[str, Any],
+    rest: List[str],
+    items: Dict[str, Any],
+    config_path: Path,
+) -> None:
+    if not rest or not rest[0]:
+        raise ValueError(f"INI region section 缺少区域 ID：{config_path}")
+    region_id = rest[0]
+    region = _ensure_named_item(
+        camera.setdefault("regions", []),
+        id_key="region_id",
+        expected_id=region_id,
+        section_items={},
+        config_path=config_path,
+    )
+    tail = rest[1:]
+    if not tail:
+        region.update(
+            _with_required_id(
+                items,
+                id_key="region_id",
+                expected_id=region_id,
+                config_path=config_path,
+            )
+        )
+        return
+    if tail == ["patchcore"]:
+        region.setdefault("patchcore", {}).update(items)
+        return
+    raise ValueError(f"INI region section 不受支持：{config_path}")
 
 
 def _ensure_named_item(

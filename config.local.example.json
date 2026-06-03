@@ -17,24 +17,31 @@
       "enabled": true,
       "watch_dir": "./input/CAM_LOCAL",
       "pattern": "*.jpg",
-      "efficientad_model_path": "",
+      "patchcore_model_path": "",
+      "color_insensitive_mode": true,
+      "detection": {
+        "model_path": "",
+        "target_class": "seat",
+        "device": "cpu"
+      },
+      "patchcore": {
+        "backend": "full",
+        "backbone_pretrained": true,
+        "backbone_device": "cpu",
+        "texture_input": "lab_l"
+      },
+      "color_branch": {
+        "enabled": false
+      },
       "filter_classifier": {
         "enabled": false,
         "model_path": "",
         "device": "cpu",
         "confidence_threshold": 0.5
       },
-      "proposal": {
-        "heatmap_threshold_mode": "adaptive",
-        "max_proposals": 20
-      },
       "rule_engine": {
         "enabled": false,
         "deployed_rules_path": ""
-      },
-      "calibration": {
-        "normalizer_path": "",
-        "projector_path": ""
       }
     }
   ],
