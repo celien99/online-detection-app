@@ -46,6 +46,22 @@ class CameraManager:
             except Exception:
                 pass
 
+    def replace_all(self, cameras: list[CameraInterface]) -> None:
+        """Replace managed cameras and connect the new set."""
+        was_running = self._running
+        self.stop_watchdog()
+        self.disconnect_all()
+        with self._lock:
+            self._cameras.clear()
+            self._last_heartbeat.clear()
+            self._watchdog_threads.clear()
+            for camera in cameras:
+                self._cameras[camera.camera_id] = camera
+                self._last_heartbeat[camera.camera_id] = time.time()
+        self.connect_all()
+        if was_running:
+            self.start_watchdog()
+
     def grab_all(self, timeout_ms: int = 1000) -> Dict[str, Any]:
         """从所有已连接相机采集一帧。返回 {camera_id: np.ndarray | None}。"""
         frames: Dict[str, Any] = {}

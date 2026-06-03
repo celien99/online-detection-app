@@ -270,6 +270,11 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
 
     def _on_seat_model_switch(new_model_id: str) -> None:
         cameras = seat_model_service.get_cameras_as_config_list(new_model_id)
+        runtime_cameras = []
+        for cam_cfg in cameras:
+            camera = create_camera(cam_cfg)
+            runtime_cameras.append(camera)
+        camera_manager.replace_all(runtime_cameras)
         inspection_service.set_active_camera_configs(cameras, seat_model_id=new_model_id)
         main_vm._camera_list.clear()
         main_vm._camera_index.clear()

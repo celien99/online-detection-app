@@ -93,3 +93,17 @@ class TestCameraManager:
         mgr.connect_all()
         statuses = mgr.get_all_statuses()
         assert statuses["CAM_D"].connected is True
+
+    def test_replace_all_disconnects_old_and_connects_new(self) -> None:
+        mgr = CameraManager()
+        old_cam = FakeCamera("CAM_OLD")
+        new_cam = FakeCamera("CAM_NEW")
+        mgr.register(old_cam)
+        mgr.connect_all()
+
+        mgr.replace_all([new_cam])
+
+        assert old_cam.is_connected is False
+        assert new_cam.is_connected is True
+        frames = mgr.grab_all()
+        assert set(frames) == {"CAM_NEW"}
