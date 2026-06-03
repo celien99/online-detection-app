@@ -4,9 +4,10 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterator, Optional
 
 
 class ConfigPersistenceService:
@@ -62,15 +63,19 @@ class ConfigPersistenceService:
         # Migrate K-V config
         self.sync_json_to_db(json_path)
 
-    def _get_conn(self) -> sqlite3.Connection:
+    @contextmanager
+    def _get_conn(self) -> Iterator[sqlite3.Connection]:
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self._db_path)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        # Auto-initialize tables on first connection so callers don't need
-        # to call init_db() explicitly for K-V operations.
-        self._init_tables(conn)
-        return conn
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            # Auto-initialize tables on first connection so callers don't need
+            # to call init_db() explicitly for K-V operations.
+            self._init_tables(conn)
+            yield conn
+        finally:
+            conn.close()
 
     @staticmethod
     def _init_tables(conn: sqlite3.Connection) -> None:
