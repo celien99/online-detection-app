@@ -141,6 +141,18 @@ uv run python -m app.main
 
 如果现场需要沿用旧的单独缺陷/停线脉冲，可将 `plc.enabled=true` 且 `line_signal.also_send_legacy_plc_defect=true`。默认情况下，`triggered + line_signal` 会以 `line_signal` 结果握手为准，避免同一次 NG 重复写 PLC 点位。
 
+### MVS 相机现场验收步骤
+
+在搭载 Hikrobot MVS 相机的工控机或测试电脑上，按下面顺序确认相机绑定和控制链路。不要只看 `OnlineDetectionDiagnostics.exe` 的 MVS DLL 检查结果；它只能确认文件存在，不能替代 SDK 加载、设备枚举和真实取图验证。
+
+1. 先在 Hikrobot MVS 客户端中确认相机可见、IP/网卡配置正确，并且能正常取流。
+2. 运行 `uv run python -m app.mvs_list --json`，或打包后运行 `OnlineDetectionMvsList.exe --json`，确认 SDK 能枚举到目标相机，记录真实序列号和工具输出的 `mvs://sn/...` 建议配置。
+3. 将 `config.json` 中的 `cameras[].source` 改为序列号绑定，例如 `mvs://sn/<真实SN>?trigger=hardware&trigger_source=Line0&trigger_activation=rising_edge&timeout_ms=2000&exposure_time=6000&gain=8&pixel_format=bgr8`。多相机时每个 `camera_id` 必须绑定对应的真实 SN，避免使用 `mvs://0` 这类枚举顺序绑定。
+4. 运行 `uv run python -m app.camera_check --config config.json --connect-only --json`，或打包后运行 `OnlineDetectionCameraCheck.exe --config config.json --connect-only --json`，确认 SDK、相机选择和参数下发成功。硬触发模式下这一步不要求 PLC 给触发脉冲。
+5. 配合 PLC 或触发线给一次到位/采图脉冲，运行 `uv run python -m app.camera_check --config config.json --frames 1 --save-dir camera_samples`，或打包后运行 `OnlineDetectionCameraCheck.exe --config config.json --frames 1 --save-dir camera_samples`，确认可以取到图并保存现场样图。
+6. 运行 `uv run python -m app.site_report --config config.json --output site_report.json --camera-samples-dir camera_samples`，或打包后运行 `OnlineDetectionSiteReport.exe --config config.json --output site_report.json --camera-samples-dir camera_samples`，汇总配置诊断、模型检查、PLC/产线信号、MVS 枚举、相机连接和样图信息。
+7. 只有当 MVS 枚举、`--connect-only`、触发取图和 `site_report.json` 都通过后，再启动 `uv run python -m app.main` 或 `OnlineDetectionApp.exe` 做联机试运行。
+
 ### Windows 打包
 
 测试电脑连接海康相机时，建议在 Windows 工控机或同等 Windows 环境打包：
