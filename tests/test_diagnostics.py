@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from pathlib import Path
 
 from app.diagnostics import main as diagnostics_main
@@ -183,8 +184,32 @@ def test_diagnostics_uses_config_directory_for_relative_paths(tmp_path: Path, mo
         },
     )
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "app.services.diagnostics.sys.version_info",
+        SimpleNamespace(major=3, minor=12, micro=0),
+    )
 
     exit_code = diagnostics_main(["--config", str(config_path), "--json"])
 
     assert exit_code == 0
     assert Path.cwd() == tmp_path
+
+
+def test_diagnostics_fails_for_unsupported_python_version(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "continuous"},
+            "cameras": [],
+            "storage": {"log_dir": str(tmp_path), "screenshot_dir": str(tmp_path)},
+        },
+    )
+    monkeypatch.setattr(
+        "app.services.diagnostics.sys.version_info",
+        SimpleNamespace(major=3, minor=13, micro=0),
+    )
+
+    report = ProductionDiagnostics(ConfigStore(str(config_path)), config_path).run()
+
+    assert any(item.name == "Python 版本" and item.status == "FAIL" for item in report.items)

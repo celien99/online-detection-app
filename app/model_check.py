@@ -44,6 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", default=None, help="Path to config.json")
     parser.add_argument("--seat-model-id", default="", help="Optional seat model ID to warm up")
     parser.add_argument("--skip-warmup", action="store_true", help="Only check imports and config parsing")
+    parser.add_argument("--basic", action="store_true", help="Only check non-ML imports for GUI/local demo environments")
+    parser.add_argument("--include-training", action="store_true", help="Also check training-only dependencies such as anomalib")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     args = parser.parse_args(argv)
 
@@ -59,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
             config_path=config_path.resolve(),
             seat_model_id=args.seat_model_id.strip() or None,
             skip_warmup=args.skip_warmup,
+            basic=args.basic,
+            include_training=args.include_training,
         )
     finally:
         os.chdir(original_cwd)
@@ -75,9 +79,11 @@ def check_models(
     config_path: Path,
     seat_model_id: str | None = None,
     skip_warmup: bool = False,
+    basic: bool = False,
+    include_training: bool = False,
 ) -> ModelCheckResult:
     started = time.time()
-    modules = _check_runtime_modules()
+    modules = _check_runtime_modules(basic=basic, include_training=include_training)
     camera_count = 0
     service: InspectionService | None = None
     try:
@@ -145,16 +151,20 @@ def check_models(
             service.shutdown()
 
 
-def _check_runtime_modules() -> list[ModuleCheck]:
+def _check_runtime_modules(*, basic: bool = False, include_training: bool = False) -> list[ModuleCheck]:
     module_names = [
         "numpy",
         "cv2",
+        "seat_defect_core",
+    ]
+    if not basic:
+        module_names.extend([
         "torch",
         "torchvision",
         "ultralytics",
-        "anomalib",
-        "seat_defect_core",
-    ]
+        ])
+    if include_training:
+        module_names.append("anomalib")
     return [_check_module(name) for name in module_names]
 
 

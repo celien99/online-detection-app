@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -293,6 +294,20 @@ class ProductionDiagnostics:
                 suggestion="最终部署目标为 Windows 工控机" if platform.system() != "Windows" else "",
             )
         ]
+        python_version = sys.version_info
+        python_status = "OK" if (python_version.major, python_version.minor) in {(3, 11), (3, 12)} else "FAIL"
+        items.append(
+            DiagnosticItem(
+                name="Python 版本",
+                status=python_status,
+                message=f"{python_version.major}.{python_version.minor}.{python_version.micro}",
+                suggestion=(
+                    "请使用 Python 3.11 或 3.12 运行；Windows 上的 PyTorch/Anomalib/PySide6 环境不建议使用 3.13+"
+                    if python_status == "FAIL"
+                    else ""
+                ),
+            )
+        )
         try:
             import torch  # type: ignore
 

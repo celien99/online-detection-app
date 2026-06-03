@@ -33,7 +33,7 @@ def test_model_check_skip_warmup_parses_config_and_restores_cwd(tmp_path: Path, 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         "app.model_check._check_runtime_modules",
-        lambda: [
+        lambda **_: [
             ModuleCheck(name="numpy", status="OK", message="imported", version="1.0"),
             ModuleCheck(name="torch", status="OK", message="imported", version="2.0 (cpu)"),
         ],
@@ -81,7 +81,7 @@ def test_model_check_warmup_passes_seat_model_id(tmp_path: Path, monkeypatch, ca
 
     monkeypatch.setattr(
         "app.model_check._check_runtime_modules",
-        lambda: [ModuleCheck(name="torch", status="OK", message="imported", version="2.0 (cpu)")],
+        lambda **_: [ModuleCheck(name="torch", status="OK", message="imported", version="2.0 (cpu)")],
     )
     monkeypatch.setattr("app.model_check.InspectionService", FakeInspectionService)
 
@@ -113,7 +113,7 @@ def test_model_check_returns_failure_when_import_fails(tmp_path: Path, monkeypat
     )
     monkeypatch.setattr(
         "app.model_check._check_runtime_modules",
-        lambda: [ModuleCheck(name="torch", status="FAIL", message="missing")],
+        lambda **_: [ModuleCheck(name="torch", status="FAIL", message="missing")],
     )
 
     exit_code = model_check_main(["--config", str(config_path), "--json"])
@@ -122,6 +122,35 @@ def test_model_check_returns_failure_when_import_fails(tmp_path: Path, monkeypat
     assert exit_code == 1
     assert payload["status"] == "FAIL"
     assert "failed to import" in payload["message"]
+
+
+def test_model_check_basic_mode_does_not_require_ml_imports(tmp_path: Path, monkeypatch, capsys) -> None:
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "continuous"},
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "file_watcher",
+                    "enabled": True,
+                    "watch_dir": "./input/CAM_A",
+                    "efficientad_model_path": "",
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        "app.model_check._check_runtime_modules",
+        lambda **_: [ModuleCheck(name="seat_defect_core", status="OK", message="imported")],
+    )
+
+    exit_code = model_check_main(["--config", str(config_path), "--skip-warmup", "--basic", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["status"] == "OK"
 
 
 def test_model_check_missing_config_returns_usage_failure(tmp_path: Path, capsys) -> None:

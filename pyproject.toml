@@ -2,12 +2,13 @@
 name = "online-detection-app"
 version = "0.1.0"
 description = "Industrial online seat defect detection program"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
-    "seat_defect_core",
     "pyside6>=6.6.0",
     "numpy>=1.24.0",
     "opencv-python>=4.8.0",
+    "scipy>=1.11.0",
+    "requests>=2.31.0",
     "pymodbus>=3.6.0",
     "structlog>=24.0.0",
     "psutil>=5.9.0",
@@ -21,6 +22,11 @@ dev = [
 packaging = [
     "pyinstaller>=6.0.0",
 ]
+ml = [
+    "torch>=2.3.0",
+    "torchvision>=0.18.0",
+    "ultralytics>=8.2.0",
+]
 
 [tool.ruff]
 target-version = "py311"
@@ -30,5 +36,10 @@ line-length = 120
 testpaths = ["tests"]
 qt_api = "pyside6"
 
-[tool.uv.sources]
-seat_defect_core = { path = "seat_defect_core" }
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app", "app.*", "seat_defect_core", "seat_defect_core.*"]
+exclude = ["packaging", "packaging.*"]
