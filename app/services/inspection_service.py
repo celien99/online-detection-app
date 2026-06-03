@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -10,6 +11,7 @@ import numpy as np
 
 from app.infrastructure.camera.manager import CameraManager
 from app.infrastructure.config_store import ConfigStore
+from app.services.core_config_adapter import build_core_inspection_config
 
 
 class InspectionService:
@@ -22,16 +24,51 @@ class InspectionService:
             max_workers=2, thread_name_prefix="inspection"
         )
         self._warmed_up = False
+        self._active_seat_model_id: str | None = None
+        self._active_camera_configs: list[dict[str, Any]] | None = None
+        self._state_lock = threading.Lock()
+
+    def set_active_seat_model(self, seat_model_id: str | None) -> None:
+        """Set the default seat model used by continuous and manual inspections."""
+        normalized = seat_model_id.strip() if isinstance(seat_model_id, str) else ""
+        with self._state_lock:
+            if self._active_seat_model_id == (normalized or None):
+                return
+            self._active_seat_model_id = normalized or None
+            self._inspector = None
+            self._warmed_up = False
+
+    def set_active_camera_configs(
+        self,
+        cameras: list[dict[str, Any]],
+        *,
+        seat_model_id: str | None = None,
+    ) -> None:
+        """Override runtime cameras for the selected seat model."""
+        normalized = seat_model_id.strip() if isinstance(seat_model_id, str) else ""
+        with self._state_lock:
+            self._active_camera_configs = [dict(camera) for camera in cameras]
+            self._active_seat_model_id = normalized or None
+            self._inspector = None
+            self._warmed_up = False
+
+    def active_seat_model_id(self) -> str | None:
+        with self._state_lock:
+            return self._active_seat_model_id
+
+    def _runtime_camera_configs(self) -> list[dict[str, Any]]:
+        with self._state_lock:
+            if self._active_camera_configs is not None:
+                return [dict(camera) for camera in self._active_camera_configs]
+        return self._config.get_camera_configs()
 
     def init_inspector(self) -> None:
         """首次调用或热重载后重新初始化 SeatDefectInspector。"""
         from seat_defect_core.api import SeatDefectInspector
-        from seat_defect_core.config import InspectionConfig
-        from seat_defect_core.runtime_config_parsers import build_inspection_config
 
-        camera_configs = self._config.get_camera_configs()
+        camera_configs = self._runtime_camera_configs()
         app_config = self._config.get_app_config()
-        inspection_cfg = build_inspection_config(
+        inspection_cfg = build_core_inspection_config(
             cameras=camera_configs,
             upload_base_url=self._config.get_offline_platform_config().get("upload_base_url", ""),
             part_id=app_config.get("station_id", "seat_demo"),
@@ -85,6 +122,7 @@ class InspectionService:
         return InspectionResponse(result=result, report_path="", artifact_paths={})
 
     def warmup(self, *, seat_model_id: Optional[str] = None) -> None:
+        seat_model_id = seat_model_id or self.active_seat_model_id()
         if self._warmed_up:
             return
         if self._inspector is None:
@@ -100,6 +138,7 @@ class InspectionService:
         timeout_s: float = 5.0,
     ) -> Any:
         """同步执行一次检测。返回 InspectionResponse。"""
+        seat_model_id = seat_model_id or self.active_seat_model_id()
         if self._can_use_mock_runtime():
             return self._mock_response(frames, seat_model_id=seat_model_id)
         if self._inspector is None:

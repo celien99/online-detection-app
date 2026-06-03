@@ -193,6 +193,8 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     hot_reload = HotReloadService(
         poll_seconds=offline_config.get("hot_reload_poll_seconds", 30),
     )
+    active_seat_model_id = seat_model_service.get_default_model_id()
+    inspection_service.set_active_seat_model(active_seat_model_id)
 
     # ── Hot reload ──
     if offline_config.get("hot_reload_enabled", False):
@@ -268,7 +270,7 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
 
     def _on_seat_model_switch(new_model_id: str) -> None:
         cameras = seat_model_service.get_cameras_as_config_list(new_model_id)
-        inspection_service._inspector = None  # force re-init with new model
+        inspection_service.set_active_camera_configs(cameras, seat_model_id=new_model_id)
         main_vm._camera_list.clear()
         main_vm._camera_index.clear()
         for idx, cam_cfg in enumerate(cameras):
