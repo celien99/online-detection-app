@@ -1,6 +1,7 @@
 """Application entry point."""
 from __future__ import annotations
 
+import argparse
 import os
 import signal
 import sys
@@ -117,9 +118,21 @@ class QmlHotReload:
         return changed
 
 
-def main(config_path: str | None = None) -> int:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Start the online detection GUI.")
+    parser.add_argument("--config", default=None, help="Path to config.json")
+    parser.add_argument("--dev", action="store_true", help="Enable QML hot reload")
+    args, qt_args = parser.parse_known_args(argv)
+    args.qt_args = qt_args
+    return args
+
+
+def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     logger = get_runtime_logger()
-    dev_mode = "--dev" in sys.argv
+    args = _parse_args(argv)
+    if config_path is None:
+        config_path = args.config
+    dev_mode = args.dev
     if dev_mode:
         os.environ.setdefault("QML_DISABLE_DISK_CACHE", "1")
         os.environ.setdefault("QT_QUICK_CONTROLS_CONF", "qtquickcontrols2.conf")
@@ -226,7 +239,8 @@ def main(config_path: str | None = None) -> int:
         from PySide6.QtCore import qputenv
         qputenv("QML_DISABLE_DISK_CACHE", b"1")
 
-    app = QGuiApplication(sys.argv)
+    qt_argv = [sys.argv[0], *args.qt_args]
+    app = QGuiApplication(qt_argv)
     app.setApplicationDisplayName("座椅缺陷在线检测系统")
 
     engine = QQmlApplicationEngine()

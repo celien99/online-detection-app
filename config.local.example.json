@@ -1,0 +1,88 @@
+{
+  "app": {
+    "line_id": "LOCAL",
+    "station_id": "desktop_debug",
+    "language": "zh-CN",
+    "fullscreen": false,
+    "grid_layout": "1x1",
+    "inspection_mode": "continuous",
+    "mock_runtime_enabled": true,
+    "trigger_poll_interval_s": 0.05,
+    "capture_timeout_s": 2.0
+  },
+  "cameras": [
+    {
+      "camera_id": "CAM_LOCAL",
+      "type": "file_watcher",
+      "enabled": true,
+      "watch_dir": "./input/CAM_LOCAL",
+      "pattern": "*.jpg",
+      "efficientad_model_path": "",
+      "filter_classifier": {
+        "enabled": false,
+        "model_path": "",
+        "device": "cpu",
+        "confidence_threshold": 0.5
+      },
+      "proposal": {
+        "heatmap_threshold_mode": "adaptive",
+        "max_proposals": 20
+      },
+      "rule_engine": {
+        "enabled": false,
+        "deployed_rules_path": ""
+      },
+      "calibration": {
+        "normalizer_path": "",
+        "projector_path": ""
+      }
+    }
+  ],
+  "plc": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 502,
+    "defect_coil": 100,
+    "stop_coil": 101
+  },
+  "line_signal": {
+    "enabled": false,
+    "type": "virtual",
+    "host": "127.0.0.1",
+    "port": 9100,
+    "timeout_s": 0.1,
+    "reconnect_interval_s": 2.0,
+    "pulse_width_s": 0.05,
+    "clear_request_on_ack": false,
+    "also_send_legacy_plc_defect": false,
+    "capture_request_coil": 10,
+    "capture_ack_coil": 11,
+    "busy_coil": 12,
+    "done_coil": 13,
+    "ok_coil": 14,
+    "ng_coil": 15,
+    "reject_coil": 16,
+    "fault_coil": 17,
+    "line_status_register": 0,
+    "part_id_register": 20,
+    "seat_model_register": 40,
+    "defect_code_register": 60,
+    "fault_code_register": 61
+  },
+  "offline_platform": {
+    "upload_base_url": "",
+    "hot_reload_enabled": false,
+    "hot_reload_poll_seconds": 30
+  },
+  "alert": {
+    "ng_popup_timeout_seconds": 30,
+    "ng_default_action": "confirm_defect",
+    "sound_enabled": false
+  },
+  "storage": {
+    "log_dir": "./logs",
+    "log_retention_days": 30,
+    "screenshot_dir": "./screenshots",
+    "models_dir": "./models"
+  }
+}

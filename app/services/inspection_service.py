@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -37,6 +38,52 @@ class InspectionService:
         )
         self._inspector = SeatDefectInspector(inspection_cfg)
 
+    def _can_use_mock_runtime(self) -> bool:
+        """Allow GUI/file-watcher debugging without installing the ML runtime."""
+        if not self._config.get_app_config().get("mock_runtime_enabled", False):
+            return False
+        cameras = self._config.get_camera_configs()
+        if not cameras:
+            return False
+        for cam in cameras:
+            detection = cam.get("detection", {})
+            if detection.get("model_path") or cam.get("efficientad_model_path"):
+                return False
+            if cam.get("filter_classifier", {}).get("enabled"):
+                return False
+        return True
+
+    def _mock_response(self, frames: Dict[str, np.ndarray], *, seat_model_id: Optional[str] = None) -> Any:
+        from seat_defect_core.core_types import CameraInspectionResult, InspectionResponse, InspectionResult
+
+        frame_id = f"mock-{int(time.time() * 1000)}"
+        timestamp = datetime.now(timezone.utc).isoformat()
+        camera_results = [
+            CameraInspectionResult(
+                camera_id=cid,
+                frame_id=frame_id,
+                source=f"camera://{cid}",
+                source_kind="camera",
+                status="OK",
+                reason="mock_runtime_no_models",
+                seat_model_id=seat_model_id,
+                original_image=frame,
+                overlay_image=frame,
+            )
+            for cid, frame in frames.items()
+            if frame is not None
+        ]
+        result = InspectionResult(
+            part_id=self._config.get_app_config().get("station_id", "seat_demo"),
+            frame_id=frame_id,
+            timestamp=timestamp,
+            status="OK" if camera_results else "REJECT",
+            decision_reason="mock_runtime_no_models" if camera_results else "no_frames",
+            seat_model_id=seat_model_id,
+            camera_results=camera_results,
+        )
+        return InspectionResponse(result=result, report_path="", artifact_paths={})
+
     def warmup(self, *, seat_model_id: Optional[str] = None) -> None:
         if self._warmed_up:
             return
@@ -53,6 +100,8 @@ class InspectionService:
         timeout_s: float = 5.0,
     ) -> Any:
         """同步执行一次检测。返回 InspectionResponse。"""
+        if self._can_use_mock_runtime():
+            return self._mock_response(frames, seat_model_id=seat_model_id)
         if self._inspector is None:
             self.init_inspector()
         from seat_defect_core.core_types import InspectionFrame
@@ -64,10 +113,17 @@ class InspectionService:
         ]
         if not inspection_frames:
             from seat_defect_core.core_types import InspectionResponse, InspectionResult
+            frame_id = f"empty-{int(time.time() * 1000)}"
             return InspectionResponse(
-                result=InspectionResult(status="REJECT", decision_reason="no_frames"),
-                status="REJECT",
-                decision_reason="no_frames",
+                result=InspectionResult(
+                    part_id=self._config.get_app_config().get("station_id", "seat_demo"),
+                    frame_id=frame_id,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    status="REJECT",
+                    decision_reason="no_frames",
+                ),
+                report_path="",
+                artifact_paths={},
             )
         response, _ = self._inspector.inspect(inspection_frames, seat_model_id=seat_model_id)
         return response
