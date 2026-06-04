@@ -446,36 +446,40 @@ Rectangle {
                                         spacing: Theme.spacingSM
 
                                         // Header row (always visible, clickable)
-                                        RowLayout {
+                                        Item {
                                             Layout.fillWidth: true
-                                            spacing: Theme.spacingMD
-                                            Layout.minimumHeight: 32
+                                            Layout.preferredHeight: 32
 
-                                            ColumnLayout {
-                                                Layout.fillWidth: true
-                                                spacing: 2
-                                                Text {
-                                                    text: modelData.camera_id || ""
-                                                    color: Theme.textPrimary
-                                                    font.pixelSize: Theme.fontSizeSM
-                                                    font.bold: true
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                spacing: Theme.spacingMD
+
+                                                ColumnLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 2
+                                                    Text {
+                                                        text: modelData.camera_id || ""
+                                                        color: Theme.textPrimary
+                                                        font.pixelSize: Theme.fontSizeSM
+                                                        font.bold: true
+                                                    }
+                                                    Text {
+                                                        text: qsTr("类型: ") + (modelData.type || "") + qsTr("  来源: ") + (modelData.source || "")
+                                                        color: Theme.textSecondary
+                                                        font.pixelSize: Theme.fontSizeXS
+                                                    }
                                                 }
+
+                                                StatusBadge {
+                                                    badgeText: modelData.enabled !== false ? qsTr("启用") : qsTr("禁用")
+                                                    badgeStatus: modelData.enabled !== false ? "ok" : "warning"
+                                                }
+
                                                 Text {
-                                                    text: qsTr("类型: ") + (modelData.type || "") + qsTr("  来源: ") + (modelData.source || "")
+                                                    text: camCard.camExpanded ? "▲" : "▼"
                                                     color: Theme.textSecondary
                                                     font.pixelSize: Theme.fontSizeXS
                                                 }
-                                            }
-
-                                            StatusBadge {
-                                                badgeText: modelData.enabled !== false ? qsTr("启用") : qsTr("禁用")
-                                                badgeStatus: modelData.enabled !== false ? "ok" : "warning"
-                                            }
-
-                                            Text {
-                                                text: camCard.camExpanded ? "▲" : "▼"
-                                                color: Theme.textSecondary
-                                                font.pixelSize: Theme.fontSizeXS
                                             }
 
                                             MouseArea {
@@ -553,7 +557,7 @@ Rectangle {
                                                 }
                                                 ToggleSwitch {
                                                     configPath: "cameras." + index + ".filter_classifier.enabled"
-                                                    checked: modelData.filter_classifier && modelData.filter_classifier.enabled
+                                                    checked: !!(modelData.filter_classifier && modelData.filter_classifier.enabled)
                                                 }
                                             }
 
@@ -562,7 +566,7 @@ Rectangle {
                                                 Layout.fillWidth: true
                                                 spacing: Theme.spacingSM
                                                 Layout.leftMargin: Theme.spacingXL
-                                                visible: modelData.filter_classifier && modelData.filter_classifier.enabled
+                                                visible: !!(modelData.filter_classifier && modelData.filter_classifier.enabled)
                                                 Text {
                                                     text: qsTr("分类器路径:")
                                                     color: Theme.textSecondary
@@ -664,7 +668,7 @@ Rectangle {
                                             }
                                             ToggleSwitch {
                                                 configPath: "cameras." + index + ".filter_classifier.enabled"
-                                                checked: modelData.filter_classifier && modelData.filter_classifier.enabled
+                                                checked: !!(modelData.filter_classifier && modelData.filter_classifier.enabled)
                                             }
                                             SettingsField {
                                                 Layout.fillWidth: true
@@ -702,7 +706,7 @@ Rectangle {
                                             }
                                             ToggleSwitch {
                                                 configPath: "cameras." + index + ".color_branch.enabled"
-                                                checked: modelData.color_branch && modelData.color_branch.enabled
+                                                checked: !!(modelData.color_branch && modelData.color_branch.enabled)
                                             }
                                         }
                                     }

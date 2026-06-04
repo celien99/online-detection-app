@@ -108,5 +108,6 @@ class SeatModelViewModel(QObject):
         self._svc.update_camera(camera_id, **{key: value})
         self.modelListChanged.emit()
 
+    @Slot()
     def refresh(self) -> None:
         self.modelListChanged.emit()

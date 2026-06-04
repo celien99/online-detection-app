@@ -9,6 +9,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import cv2
 import numpy as np
@@ -43,6 +44,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout-ms", type=int, default=2000, help="Per-frame grab timeout")
     parser.add_argument("--save-dir", default="", help="Directory for saving the last grabbed frame per camera")
     parser.add_argument(
+        "--mvs-trigger-mode",
+        choices=["config", "continuous", "software", "hardware"],
+        default="config",
+        help="Override MVS trigger mode for this check without editing config.json",
+    )
+    parser.add_argument(
         "--connect-only",
         action="store_true",
         help="Only connect and read camera status; useful for hardware-triggered cameras without a PLC pulse",
@@ -72,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
                     timeout_ms=max(1, args.timeout_ms),
                     save_dir=Path(args.save_dir) if args.save_dir else None,
                     connect_only=args.connect_only,
+                    mvs_trigger_mode=args.mvs_trigger_mode,
                 )
                 for cam in camera_configs
             ]
@@ -92,7 +100,9 @@ def check_camera(
     timeout_ms: int = 2000,
     save_dir: Path | None = None,
     connect_only: bool = False,
+    mvs_trigger_mode: str = "config",
 ) -> CameraCheckItem:
+    camera_config = _with_mvs_trigger_mode(camera_config, mvs_trigger_mode)
     camera_id = str(camera_config.get("camera_id", "<unknown>"))
     started = time.time()
     camera = None
@@ -124,7 +134,7 @@ def check_camera(
             return CameraCheckItem(
                 camera_id=camera_id,
                 status="FAIL",
-                message="Connected but did not receive any frames before timeout",
+                message=_no_frame_message(camera_config),
                 width=status.width,
                 height=status.height,
                 fps=status.fps,
@@ -197,6 +207,43 @@ def _save_sample(camera_id: str, frame, save_dir: Path) -> str:
     if not cv2.imwrite(str(path), frame):
         raise RuntimeError(f"Failed to write camera sample: {path}")
     return str(path)
+
+
+def _with_mvs_trigger_mode(camera_config: dict[str, Any], mode: str) -> dict[str, Any]:
+    normalized = (mode or "config").strip().lower()
+    if normalized == "config":
+        return camera_config
+    if camera_config.get("type", "mvs") != "mvs":
+        return camera_config
+    source = str(camera_config.get("source", ""))
+    if not source.startswith("mvs://"):
+        return camera_config
+
+    parsed = urlparse(source)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query["trigger"] = normalized
+    updated = parsed._replace(query=urlencode(query))
+    cloned = dict(camera_config)
+    cloned["source"] = urlunparse(updated)
+    return cloned
+
+
+def _no_frame_message(camera_config: dict[str, Any]) -> str:
+    source = str(camera_config.get("source", ""))
+    trigger_mode = _mvs_trigger_mode(source) if source.startswith("mvs://") else ""
+    if trigger_mode == "hardware":
+        return (
+            "Connected but did not receive any frames before timeout; hardware trigger is enabled, "
+            "so send a trigger pulse or rerun with --connect-only / --mvs-trigger-mode continuous"
+        )
+    if trigger_mode == "software":
+        return "Connected and sent software triggers, but did not receive any frames before timeout"
+    return "Connected but did not receive any frames before timeout"
+
+
+def _mvs_trigger_mode(source: str) -> str:
+    query = dict(parse_qsl(urlparse(source).query, keep_blank_values=True))
+    return query.get("trigger", "continuous").strip().lower()
 
 
 if __name__ == "__main__":

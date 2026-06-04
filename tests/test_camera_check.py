@@ -7,7 +7,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+import app.camera_check as camera_check
 from app.camera_check import main as camera_check_main
+from app.infrastructure.camera.interface import CameraStatus
 
 
 def _write_config(path: Path, data: dict) -> None:
@@ -115,3 +117,123 @@ def test_camera_check_connect_only_skips_frame_requirement(tmp_path: Path, monke
     assert item["frames_grabbed"] == 0
     assert item["sample_path"] == ""
     assert not (site_dir / "camera_samples").exists()
+
+
+def test_camera_check_hardware_trigger_timeout_suggests_trigger_options(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "mvs",
+                    "enabled": True,
+                    "source": "mvs://0?trigger=hardware&trigger_source=Line0",
+                }
+            ]
+        },
+    )
+
+    class FakeCamera:
+        camera_id = "CAM_A"
+        is_connected = True
+        width = 4096
+        height = 3072
+        fps = 9.5
+
+        def connect(self) -> None:
+            pass
+
+        def disconnect(self) -> None:
+            pass
+
+        def grab_frame(self, timeout_ms: int = 1000):
+            return None
+
+        def get_status(self):
+            return CameraStatus(camera_id="CAM_A", connected=True, width=4096, height=3072, fps=9.5)
+
+    monkeypatch.setattr(camera_check, "create_camera", lambda camera_config: FakeCamera())
+
+    exit_code = camera_check_main(["--config", str(config_path), "--frames", "1", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    item = payload["items"][0]
+
+    assert exit_code == 1
+    assert item["status"] == "FAIL"
+    assert "hardware trigger is enabled" in item["message"]
+    assert "--mvs-trigger-mode continuous" in item["message"]
+
+
+def test_camera_check_can_override_mvs_trigger_mode_for_diagnostics(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "mvs",
+                    "enabled": True,
+                    "source": "mvs://0?trigger=hardware&trigger_source=Line0&timeout_ms=2000",
+                }
+            ]
+        },
+    )
+    seen_sources: list[str] = []
+
+    class FakeCamera:
+        camera_id = "CAM_A"
+        is_connected = True
+        width = 10
+        height = 8
+        fps = 10.0
+
+        def __init__(self, source: str) -> None:
+            self._source = source
+
+        def connect(self) -> None:
+            pass
+
+        def disconnect(self) -> None:
+            pass
+
+        def grab_frame(self, timeout_ms: int = 1000):
+            if "trigger=continuous" in self._source:
+                return np.zeros((8, 10, 3), dtype=np.uint8)
+            return None
+
+        def get_status(self):
+            return CameraStatus(camera_id="CAM_A", connected=True, width=10, height=8, fps=10.0)
+
+    def fake_create_camera(camera_config):
+        seen_sources.append(camera_config["source"])
+        return FakeCamera(camera_config["source"])
+
+    monkeypatch.setattr(camera_check, "create_camera", fake_create_camera)
+
+    exit_code = camera_check_main([
+        "--config",
+        str(config_path),
+        "--frames",
+        "1",
+        "--mvs-trigger-mode",
+        "continuous",
+        "--json",
+    ])
+    payload = json.loads(capsys.readouterr().out)
+    item = payload["items"][0]
+
+    assert exit_code == 0
+    assert item["status"] == "OK"
+    assert item["frames_grabbed"] == 1
+    assert "trigger=continuous" in seen_sources[0]
