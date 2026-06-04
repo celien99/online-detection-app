@@ -15,7 +15,7 @@ from app.infrastructure.line_signal import (
     VirtualLineSignalAdapter,
 )
 from app.infrastructure.plc.interface import LineStatus
-from app.services.inspection_service import InspectionService
+from app.services.inspection_service import InspectionRunOutput, InspectionService
 
 
 class TriggerRequestHandledError(RuntimeError):
@@ -144,12 +144,13 @@ class TriggerService:
             frames = self._capture_frames_until_timeout()
             if not frames:
                 raise RuntimeError("capture_timeout_no_frames")
-            response = self._inspection.inspect_sync(
+            output = self._inspection.inspect_sync(
                 frames,
                 seat_model_id=request.seat_model_id,
                 timeout_s=5.0,
             )
-            self._handle_response(response, frames)
+            response = _response_from_output(output)
+            self._handle_response(output, frames)
             result_signal = _build_result_signal(request, response)
             self._adapter.send_result(result_signal)
             self._set_state(
@@ -235,3 +236,9 @@ def _defect_type_to_code(defect_type: str) -> int:
     if not defect_type:
         return 0
     return abs(hash(defect_type)) % 32767 or 1
+
+
+def _response_from_output(output: Any) -> Any:
+    if isinstance(output, InspectionRunOutput):
+        return output.response
+    return getattr(output, "response", output)

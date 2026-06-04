@@ -42,6 +42,7 @@ class MainViewModel(QObject):
     ngDefectTypeChanged = Signal()
     ngConfidenceChanged = Signal()
     ngCameraIdChanged = Signal()
+    ngImageVersionChanged = Signal()
     cameraListChanged = Signal()
     remainingSecondsChanged = Signal()
     lineStatusChanged = Signal()
@@ -74,6 +75,7 @@ class MainViewModel(QObject):
         self._ng_defect_type = ""
         self._ng_confidence = 0.0
         self._ng_camera_id = ""
+        self._ng_image_version = 0
         self._remaining_seconds = 0
         self._last_inspect_time = 0.0
         self._inspect_count = 0
@@ -114,6 +116,7 @@ class MainViewModel(QObject):
     def _get_ng_defect_type(self) -> str: return self._ng_defect_type
     def _get_ng_confidence(self) -> float: return self._ng_confidence
     def _get_ng_camera_id(self) -> str: return self._ng_camera_id
+    def _get_ng_image_version(self) -> int: return self._ng_image_version
     def _get_camera_list(self) -> list: return self._camera_list
     def _get_remaining_seconds(self) -> int: return self._remaining_seconds
     def _get_line_status(self) -> str: return self._line_status
@@ -131,6 +134,7 @@ class MainViewModel(QObject):
     ngDefectType = Property(str, _get_ng_defect_type, notify=ngDefectTypeChanged)
     ngConfidence = Property(float, _get_ng_confidence, notify=ngConfidenceChanged)
     ngCameraId = Property(str, _get_ng_camera_id, notify=ngCameraIdChanged)
+    ngImageVersion = Property(int, _get_ng_image_version, notify=ngImageVersionChanged)
     cameraList = Property(list, _get_camera_list, notify=cameraListChanged)
     remainingSeconds = Property(int, _get_remaining_seconds, notify=remainingSecondsChanged)
     lineStatus = Property(str, _get_line_status, notify=lineStatusChanged)
@@ -186,7 +190,7 @@ class MainViewModel(QObject):
             self._last_camera_emit = now
             self.cameraListChanged.emit()
 
-    def update_from_result(self, response: Any) -> None:
+    def update_from_result(self, response: Any, camera_images: Dict[str, Any] | None = None) -> None:
         """根据检测结果更新状态。"""
         self._last_inspect_time = time.time()
         self._inspect_count += 1
@@ -221,7 +225,7 @@ class MainViewModel(QObject):
         self.ngCountChanged.emit()
 
         if response.status == "NG":
-            self._alert.trigger(response)
+            self._alert.trigger(response, camera_images=camera_images)
 
     def update_stats_from_collector(self) -> None:
         stats = self._stats.get_today_stats()
@@ -246,12 +250,14 @@ class MainViewModel(QObject):
             self._ng_defect_type = getattr(ng_cam.filter_result, 'class_name', '') if hasattr(ng_cam, 'filter_result') and ng_cam.filter_result else ''
             self._ng_confidence = float(ng_cam.texture_result.score) if hasattr(ng_cam, 'texture_result') and ng_cam.texture_result else 0.0
             self._ng_camera_id = ng_cam.camera_id
+        self._ng_image_version += 1
         self._ng_visible = True
         self._remaining_seconds = int(alert.remaining_seconds)
         self.ngOverlayVisibleChanged.emit()
         self.ngDefectTypeChanged.emit()
         self.ngConfidenceChanged.emit()
         self.ngCameraIdChanged.emit()
+        self.ngImageVersionChanged.emit()
         self.remainingSecondsChanged.emit()
 
     def _on_alert_dismissed(self, alert: AlertState) -> None:

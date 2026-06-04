@@ -17,6 +17,7 @@ from app.infrastructure.line_signal import (
     ModbusLineSignalAdapter,
     VirtualLineSignalAdapter,
 )
+from app.services.inspection_service import InspectionRunOutput
 from app.services.trigger_service import TriggerService
 
 
@@ -74,7 +75,10 @@ class FakeInspectionService:
     def inspect_sync(self, frames, *, seat_model_id=None, timeout_s=5.0):
         self.calls += 1
         assert "CAM_A" in frames
-        return FakeResponse()
+        return InspectionRunOutput(
+            response=FakeResponse(),
+            camera_images={"CAM_A": np.ones((4, 4, 3), dtype=np.uint8)},
+        )
 
 
 class EmptyCamera(FakeCamera):
@@ -111,6 +115,8 @@ def test_trigger_service_runs_one_inspection_for_manual_request() -> None:
 
     assert inspection.calls == 1
     assert len(handled) == 1
+    assert isinstance(handled[0][0], InspectionRunOutput)
+    assert "CAM_A" in handled[0][0].camera_images
     assert adapter.last_result is not None
     assert adapter.last_result.status == InspectionDecision.OK
     assert adapter.last_result.part_id == "P1"

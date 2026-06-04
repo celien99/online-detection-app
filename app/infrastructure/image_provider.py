@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import threading
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QImage
 from PySide6.QtQuick import QQuickImageProvider
 
 
@@ -18,7 +18,7 @@ class CameraImageProvider(QQuickImageProvider):
             cache: false
         }
         Image {
-            source: "image://camera/CAM_FRONT_heatmap"
+            source: "image://camera/CAM_FRONT_overlay"
             cache: false
         }
     """
@@ -27,6 +27,7 @@ class CameraImageProvider(QQuickImageProvider):
         super().__init__(QQuickImageProvider.ImageType.Image)
         self._frames: Dict[str, np.ndarray] = {}
         self._heatmaps: Dict[str, np.ndarray] = {}
+        self._overlays: Dict[str, np.ndarray] = {}
         self._lock = threading.Lock()
 
     def update_frame(self, camera_id: str, frame: np.ndarray) -> None:
@@ -39,18 +40,24 @@ class CameraImageProvider(QQuickImageProvider):
         with self._lock:
             self._heatmaps[camera_id] = heatmap.copy()
 
+    def update_overlay(self, camera_id: str, overlay: np.ndarray) -> None:
+        """更新指定相机的检测叠加图。overlay 必须是 BGR numpy array。"""
+        with self._lock:
+            self._overlays[camera_id] = overlay.copy()
+
     def requestImage(self, image_id: str, size, requested_size):
         """QML 引擎调用此方法请求图像。
 
         支持的后缀:
         - 无后缀: 原始相机帧
         - _original: 同原始帧（NG 弹窗原图面板）
+        - _overlay: core 生成的检测叠加图
         - _heatmap: 异常热力图覆盖层
         """
         image_id = image_id.split("?", 1)[0]
         base_id = image_id
         suffix = ""
-        for s in ("_heatmap", "_original"):
+        for s in ("_overlay", "_heatmap", "_original"):
             if image_id.endswith(s):
                 base_id = image_id[: -len(s)]
                 suffix = s
@@ -58,7 +65,15 @@ class CameraImageProvider(QQuickImageProvider):
 
         with self._lock:
             frame = self._frames.get(base_id)
-            heatmap = self._heatmaps.get(base_id) if suffix == "_heatmap" else None
+            heatmap = self._heatmaps.get(base_id)
+            overlay = self._overlays.get(base_id)
+
+        if suffix == "_overlay":
+            if overlay is not None:
+                return self._bgr_to_qimage(overlay)
+            if frame is not None:
+                return self._render_heatmap(frame, heatmap)
+
         if frame is None:
             empty = QImage(1, 1, QImage.Format.Format_RGB32)
             empty.fill(0)
@@ -67,6 +82,9 @@ class CameraImageProvider(QQuickImageProvider):
         if suffix == "_heatmap":
             return self._render_heatmap(frame, heatmap)
 
+        return self._bgr_to_qimage(frame)
+
+    def _bgr_to_qimage(self, frame: np.ndarray) -> QImage:
         h, w = frame.shape[:2]
         rgb = frame[:, :, ::-1].copy()
         qimage = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888)
