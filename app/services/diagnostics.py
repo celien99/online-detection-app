@@ -1,6 +1,7 @@
 """Production readiness diagnostics."""
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import platform
@@ -319,6 +320,29 @@ class ProductionDiagnostics:
                 ),
             )
         )
+        for module_name in ("numpy", "cv2", "torchvision", "ultralytics"):
+            try:
+                importlib.import_module(module_name)
+            except Exception as exc:
+                items.append(
+                    DiagnosticItem(
+                        name=f"Python 模块 {module_name}",
+                        status="FAIL",
+                        message=str(exc),
+                        suggestion=(
+                            "当前环境缺少 ML 依赖。请重新执行 "
+                            "scripts\\setup_windows_conda.ps1 -EnvName online-detection-app -Ml"
+                        ),
+                    )
+                )
+            else:
+                items.append(
+                    DiagnosticItem(
+                        name=f"Python 模块 {module_name}",
+                        status="OK",
+                        message="imported",
+                    )
+                )
         try:
             import torch  # type: ignore
 
