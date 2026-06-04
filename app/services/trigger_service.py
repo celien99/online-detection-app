@@ -47,6 +47,7 @@ class TriggerService:
         camera_manager: CameraManager,
         inspection_service: InspectionService,
         handle_response: Callable[[Any, dict], None],
+        handle_frames: Callable[[dict], None] | None = None,
         mode: str = "triggered",
         poll_interval_s: float = 0.05,
         capture_timeout_s: float = 2.0,
@@ -55,6 +56,7 @@ class TriggerService:
         self._camera_manager = camera_manager
         self._inspection = inspection_service
         self._handle_response = handle_response
+        self._handle_frames = handle_frames
         self._mode = mode
         self._poll_interval_s = poll_interval_s
         self._capture_timeout_s = capture_timeout_s
@@ -144,6 +146,8 @@ class TriggerService:
             frames = self._capture_frames_until_timeout()
             if not frames:
                 raise RuntimeError("capture_timeout_no_frames")
+            if self._handle_frames is not None:
+                self._handle_frames(frames)
             output = self._inspection.inspect_sync(
                 frames,
                 seat_model_id=request.seat_model_id,

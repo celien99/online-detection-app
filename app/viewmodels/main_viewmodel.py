@@ -159,8 +159,14 @@ class MainViewModel(QObject):
 
     @Slot()
     def manualTrigger(self) -> None:
-        if self._trigger_service is not None:
-            self._trigger_service.manual_trigger()
+        if self._trigger_service is None:
+            self._set_trigger_error("trigger_service_not_started")
+            return
+        try:
+            if self._trigger_service.manual_trigger():
+                self._set_trigger_error("")
+        except Exception as exc:
+            self._set_trigger_error(str(exc))
 
     @Slot()
     def refreshTriggerState(self) -> None:
@@ -300,6 +306,12 @@ class MainViewModel(QObject):
         if self._trigger_error != state.last_error:
             self._trigger_error = state.last_error
             self.triggerErrorChanged.emit()
+
+    def _set_trigger_error(self, message: str) -> None:
+        if self._trigger_error == message:
+            return
+        self._trigger_error = message
+        self.triggerErrorChanged.emit()
 
 
 def _camera_defect_label(camera_result: Any) -> str:

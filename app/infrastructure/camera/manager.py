@@ -5,6 +5,7 @@ import threading
 import time
 from typing import Any, Dict
 
+from app.runtime_logging import get_runtime_logger
 from app.infrastructure.camera.interface import CameraInterface, CameraStatus
 
 
@@ -36,6 +37,7 @@ class CameraManager:
                 camera.connect()
                 self._last_heartbeat[camera.camera_id] = time.time()
             except Exception:
+                get_runtime_logger().exception("Camera connection failed camera_id=%s", camera.camera_id)
                 pass
 
     def disconnect_all(self) -> None:

@@ -95,12 +95,14 @@ def test_trigger_service_runs_one_inspection_for_manual_request() -> None:
     adapter.connect()
     inspection = FakeInspectionService()
     handled = []
+    preview_frames = []
 
     svc = TriggerService(
         adapter=adapter,
         camera_manager=camera_manager,
         inspection_service=inspection,
         handle_response=lambda response, frames: handled.append((response, frames)),
+        handle_frames=lambda frames: preview_frames.append(frames),
         capture_timeout_s=0.2,
     )
     svc.start()
@@ -114,6 +116,8 @@ def test_trigger_service_runs_one_inspection_for_manual_request() -> None:
         camera_manager.disconnect_all()
 
     assert inspection.calls == 1
+    assert len(preview_frames) == 1
+    assert "CAM_A" in preview_frames[0]
     assert len(handled) == 1
     assert isinstance(handled[0][0], InspectionRunOutput)
     assert "CAM_A" in handled[0][0].camera_images

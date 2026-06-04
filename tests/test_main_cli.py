@@ -1,7 +1,8 @@
 """Tests for GUI entry-point CLI parsing."""
 from __future__ import annotations
 
-from app.main import _iter_patchcore_model_paths, _parse_args
+from app.main import _iter_patchcore_model_paths, _parse_args, _should_send_legacy_plc_defect
+from app.runtime_modes import is_triggered_mode, normalize_inspection_mode
 
 
 def test_main_cli_parses_config_and_dev_without_passing_to_qt() -> None:
@@ -10,6 +11,23 @@ def test_main_cli_parses_config_and_dev_without_passing_to_qt() -> None:
     assert args.config == "site.json"
     assert args.dev is True
     assert args.qt_args == ["--platform", "offscreen"]
+
+
+def test_inspection_mode_trigger_alias_is_treated_as_triggered() -> None:
+    assert normalize_inspection_mode("trigger") == "triggered"
+    assert normalize_inspection_mode("manual-trigger") == "triggered"
+    assert is_triggered_mode("trigger") is True
+
+
+def test_legacy_plc_defect_uses_normalized_runtime_mode() -> None:
+    assert (
+        _should_send_legacy_plc_defect(
+            "trigger",
+            {"enabled": True, "also_send_legacy_plc_defect": False},
+            {"enabled": True},
+        )
+        is False
+    )
 
 
 def test_iter_patchcore_model_paths_includes_region_models() -> None:

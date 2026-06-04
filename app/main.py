@@ -45,6 +45,7 @@ from app.viewmodels.seat_model_viewmodel import SeatModelViewModel
 from app.viewmodels.model_deploy_viewmodel import ModelDeployViewModel
 from app.runtime_paths import chdir_to_config_dir, resolve_config_path
 from app.runtime_logging import get_runtime_logger, setup_runtime_logging
+from app.runtime_modes import TRIGGERED_MODE, normalize_inspection_mode
 
 
 def _create_plc(plc_config: Dict[str, Any]) -> PLCInterface:
@@ -62,7 +63,7 @@ def _should_send_legacy_plc_defect(runtime_mode: str, line_config: Dict[str, Any
     """Keep the old defect pulse only when the line handshake is not authoritative."""
     if not plc_config.get("enabled", False):
         return False
-    if runtime_mode == "triggered" and line_config.get("enabled", False):
+    if normalize_inspection_mode(runtime_mode) == TRIGGERED_MODE and line_config.get("enabled", False):
         return bool(line_config.get("also_send_legacy_plc_defect", False))
     return True
 
@@ -165,13 +166,22 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     app_config = config.get_app_config()
     alert_config = config.get_alert_config()
     offline_config = config.get_offline_platform_config()
-    runtime_mode = app_config.get("inspection_mode", "continuous")
+    raw_runtime_mode = app_config.get("inspection_mode", "continuous")
+    runtime_mode = normalize_inspection_mode(raw_runtime_mode)
 
     # ── Persistence ──
     storage_cfg = config.get_storage_config()
     log_path = setup_runtime_logging(storage_cfg.get("log_dir", "./logs"))
     logger = get_runtime_logger()
-    logger.info("Starting application config=%s mode=%s runtime_log=%s", config_path, runtime_mode, log_path)
+    logger.info(
+        "Starting application config=%s mode=%s raw_mode=%s runtime_log=%s",
+        config_path,
+        runtime_mode,
+        raw_runtime_mode,
+        log_path,
+    )
+    if raw_runtime_mode != runtime_mode:
+        logger.warning("Normalized inspection_mode from %r to %r", raw_runtime_mode, runtime_mode)
     db_path = str(Path(storage_cfg.get("log_dir", "./logs")) / "inspection.db")
     persistence = ConfigPersistenceService(db_path)
     persistence.migrate_from_json(config_path)
@@ -369,7 +379,15 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     running = True
     trigger_service: TriggerService | None = None
 
-    def _handle_inspection_response(output: Any, frames: dict) -> None:
+    def _publish_live_frames(frames: dict) -> None:
+        valid_frames = {cid: frame for cid, frame in frames.items() if frame is not None}
+        if not valid_frames:
+            return
+        for cid, frame in valid_frames.items():
+            image_provider.update_frame(cid, frame)
+        main_vm.mark_cameras_live(list(valid_frames.keys()))
+
+    def _handle_inspection_response(output: Any, frames: dict, *, publish_frames: bool = True) -> None:
         if isinstance(output, InspectionRunOutput):
             response = output.response
             camera_images = output.camera_images
@@ -377,13 +395,11 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
             response = getattr(output, "response", output)
             camera_images = getattr(output, "camera_images", {})
 
-        for cid, frame in frames.items():
-            image_provider.update_frame(cid, frame)
+        if publish_frames:
+            _publish_live_frames(frames)
         for cid, overlay in camera_images.items():
             if overlay is not None:
                 image_provider.update_overlay(cid, overlay)
-
-        main_vm.mark_cameras_live(list(frames.keys()))
 
         if hasattr(response, 'result') and hasattr(response.result, 'camera_results'):
             for cr in response.result.camera_results:
@@ -419,9 +435,10 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                     time.sleep(0.01)
                     continue
 
+                _publish_live_frames(valid_frames)
                 future = inspection_service.inspect_async(valid_frames)
                 output = future.result(timeout=5.0)
-                _handle_inspection_response(output, valid_frames)
+                _handle_inspection_response(output, valid_frames, publish_frames=False)
 
             except Exception as exc:
                 logger.exception("Inspection loop failed; marking frames as REJECT")
@@ -441,12 +458,17 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                 main_vm.update_stats_from_collector()
                 time.sleep(0.1)
 
-    if runtime_mode == "triggered":
+    if runtime_mode == TRIGGERED_MODE:
         trigger_service = TriggerService(
             adapter=line_signal,
             camera_manager=camera_manager,
             inspection_service=inspection_service,
-            handle_response=_handle_inspection_response,
+            handle_response=lambda output, frames: _handle_inspection_response(
+                output,
+                frames,
+                publish_frames=False,
+            ),
+            handle_frames=_publish_live_frames,
             mode=runtime_mode,
             poll_interval_s=float(app_config.get("trigger_poll_interval_s", 0.05)),
             capture_timeout_s=float(app_config.get("capture_timeout_s", 2.0)),

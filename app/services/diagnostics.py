@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from app.infrastructure.config_store import ConfigStore
+from app.runtime_modes import TRIGGERED_MODE, normalize_inspection_mode
 
 PLACEHOLDER_MARKERS = ("REPLACE_WITH", "<", ">")
 
@@ -102,7 +103,7 @@ class ProductionDiagnostics:
 
     def _check_mvs_camera_source(self, camera_id: str, source: str) -> list[DiagnosticItem]:
         app_cfg = self._config.get_app_config()
-        if app_cfg.get("inspection_mode", "continuous") != "triggered" or not source.startswith("mvs://"):
+        if normalize_inspection_mode(app_cfg.get("inspection_mode", "continuous")) != TRIGGERED_MODE or not source.startswith("mvs://"):
             return []
         parsed = urlparse(source)
         query = parse_qs(parsed.query)
@@ -239,8 +240,8 @@ class ProductionDiagnostics:
     def _check_line_signal(self) -> list[DiagnosticItem]:
         app_cfg = self._config.get_app_config()
         line_cfg = self._config.get("line_signal", default={})
-        mode = app_cfg.get("inspection_mode", "continuous")
-        if mode != "triggered":
+        mode = normalize_inspection_mode(app_cfg.get("inspection_mode", "continuous"))
+        if mode != TRIGGERED_MODE:
             return [
                 DiagnosticItem(
                     name="产线触发",
