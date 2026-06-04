@@ -27,7 +27,7 @@ from app.infrastructure.plc.modbus_adapter import ModbusTCPAdapter
 from app.infrastructure.plc.virtual_plc import VirtualPLC
 from app.services.alert_manager import AlertManager
 from app.services.hot_reload_service import HotReloadService
-from app.services.inspection_service import InspectionService
+from app.services.inspection_service import InspectionRunOutput, InspectionService
 from app.services.log_engine import LogEngine
 from app.services.stats_collector import InspectionRecord, StatsCollector
 from app.services.trigger_service import TriggerService
@@ -354,9 +354,19 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     running = True
     trigger_service: TriggerService | None = None
 
-    def _handle_inspection_response(response: Any, frames: dict) -> None:
+    def _handle_inspection_response(output: Any, frames: dict) -> None:
+        if isinstance(output, InspectionRunOutput):
+            response = output.response
+            camera_images = output.camera_images
+        else:
+            response = getattr(output, "response", output)
+            camera_images = getattr(output, "camera_images", {})
+
         for cid, frame in frames.items():
             image_provider.update_frame(cid, frame)
+        for cid, overlay in camera_images.items():
+            if overlay is not None:
+                image_provider.update_overlay(cid, overlay)
 
         main_vm.mark_cameras_live(list(frames.keys()))
 
@@ -381,7 +391,7 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                         if amap is not None:
                             image_provider.update_heatmap(cr.camera_id, amap)
 
-        main_vm.update_from_result(response)
+        main_vm.update_from_result(response, camera_images=camera_images)
 
     def inspection_loop() -> None:
         nonlocal running
@@ -395,8 +405,8 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                     continue
 
                 future = inspection_service.inspect_async(valid_frames)
-                response = future.result(timeout=5.0)
-                _handle_inspection_response(response, valid_frames)
+                output = future.result(timeout=5.0)
+                _handle_inspection_response(output, valid_frames)
 
             except Exception as exc:
                 logger.exception("Inspection loop failed; marking frames as REJECT")

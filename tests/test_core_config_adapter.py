@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from app.services.core_config_adapter import build_core_inspection_config
 
 
@@ -33,13 +35,6 @@ def test_build_core_config_ignores_capture_fields_and_resolves_paths(tmp_path: P
                     "deployed_rules_path": "./rules/rules.json",
                     "rules": [{"name": "small-score", "max_anomaly_score": 0.2}],
                 },
-                "regions": [
-                    {
-                        "region_id": "upper",
-                        "box": [0.0, 0.0, 1.0, 0.5],
-                        "patchcore_model_path": "./models/upper_patchcore.npz",
-                    }
-                ],
             }
         ],
         upload_base_url="https://offline.example.test",
@@ -61,5 +56,25 @@ def test_build_core_config_ignores_capture_fields_and_resolves_paths(tmp_path: P
     assert camera.rule_engine.enabled is True
     assert camera.rule_engine.deployed_rules_path == "./rules/rules.json"
     assert camera.rule_engine.rules[0].name == "small-score"
-    assert camera.regions[0].region_id == "upper"
-    assert camera.regions[0].patchcore_model_path == str((tmp_path / "models/upper_patchcore.npz").resolve())
+    assert camera.regions == []
+
+
+def test_build_core_config_rejects_region_mode(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="regions mode is not supported by online detection app"):
+        build_core_inspection_config(
+            cameras=[
+                {
+                    "camera_id": "CAM_A",
+                    "source": "./input/CAM_A",
+                    "patchcore_model_path": "./models/cam_a_patchcore.npz",
+                    "regions": [
+                        {
+                            "region_id": "upper",
+                            "box": [0.0, 0.0, 1.0, 0.5],
+                            "patchcore_model_path": "./models/upper_patchcore.npz",
+                        }
+                    ],
+                }
+            ],
+            config_dir=tmp_path,
+        )

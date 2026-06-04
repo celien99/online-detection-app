@@ -81,6 +81,7 @@ Rectangle {
         confidence: viewModel ? viewModel.ngConfidence : 0.0
         cameraId: viewModel ? viewModel.ngCameraId : ""
         countdown: viewModel ? viewModel.remainingSeconds : 0
+        imageVersion: viewModel ? viewModel.ngImageVersion : 0
 
         onConfirmNG: { if (viewModel) viewModel.acknowledgeNG(); }
         onMarkReview: { if (viewModel) viewModel.markReview(); }

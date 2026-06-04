@@ -40,6 +40,7 @@ def build_core_inspection_config(
         InspectionConfig,
     )
 
+    validate_regions_unsupported(cameras)
     root = (config_dir or Path.cwd()).resolve()
     return InspectionConfig(
         cameras=[_camera_config(camera, root) for camera in cameras],
@@ -55,6 +56,7 @@ def build_core_inspection_config(
 def _camera_config(payload: dict[str, Any], config_dir: Path) -> Any:
     from seat_defect_core.config import CameraConfig
 
+    _reject_regions(payload)
     return CameraConfig(
         camera_id=_require_string(payload, "camera_id"),
         patchcore_model_path=_resolve_local_path(
@@ -72,7 +74,26 @@ def _camera_config(payload: dict[str, Any], config_dir: Path) -> Any:
         color_branch=_color_branch_config(payload.get("color_branch")),
         filter_classifier=_filter_classifier_config(payload.get("filter_classifier"), config_dir),
         rule_engine=_rule_engine_config(payload.get("rule_engine")),
-        regions=_region_configs(payload.get("regions"), config_dir),
+        regions=[],
+    )
+
+
+def validate_regions_unsupported(cameras: list[dict[str, Any]]) -> None:
+    """Reject region-mode configs at the online app boundary."""
+    for camera in cameras:
+        _reject_regions(camera)
+
+
+def _reject_regions(payload: dict[str, Any]) -> None:
+    regions = payload.get("regions")
+    if regions is None:
+        return
+    if isinstance(regions, list) and not regions:
+        return
+    camera_id = str(payload.get("camera_id", "<unknown>"))
+    raise ValueError(
+        "regions mode is not supported by online detection app"
+        f" for camera {camera_id}"
     )
 
 

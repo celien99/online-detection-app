@@ -10,6 +10,7 @@ Rectangle {
     property real confidence: 0.0
     property string cameraId: ""
     property int countdown: 30
+    property int imageVersion: 0
 
     signal confirmNG()
     signal markReview()
@@ -100,14 +101,14 @@ Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         Layout.margins: 4
-                        source: "image://camera/" + cameraId + "_original"
+                        source: "image://camera/" + cameraId + "_original?v=" + imageVersion
                         fillMode: Image.PreserveAspectFit
                         cache: false
                     }
                 }
             }
 
-            // Heatmap
+            // Detection overlay
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -126,7 +127,7 @@ Rectangle {
                         Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: parent.radius; color: parent.color }
                         Text {
                             anchors.centerIn: parent
-                            text: qsTr("热力图  分数: ") + confidence.toFixed(4)
+                            text: qsTr("检测图  分数: ") + confidence.toFixed(4)
                             color: Theme.textSecondary
                             font.pixelSize: Theme.fontSizeXS
                         }
@@ -135,7 +136,7 @@ Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         Layout.margins: 4
-                        source: "image://camera/" + cameraId + "_heatmap"
+                        source: "image://camera/" + cameraId + "_overlay?v=" + imageVersion
                         fillMode: Image.PreserveAspectFit
                         cache: false
                     }
