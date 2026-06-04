@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from ctypes import POINTER, byref, c_ubyte, cast, memset, sizeof
 from dataclasses import dataclass
@@ -40,6 +41,8 @@ from .sdk.MvCameraControl_header import (
 )
 from .sdk import MvErrorDefine_const as error_constants
 from .pixel_utils import char_array_to_string, int_to_ip, is_color_pixel_type, is_mono_pixel_type
+
+logger = logging.getLogger(__name__)
 
 PIXEL_FORMAT_MAP = {
     "mono8": PixelType_Gvsp_Mono8,
@@ -345,10 +348,18 @@ class HikCamera:
                 raise MvsCameraError(f"Set TriggerSource failed: {parse_error(ret)}")
             normalized_activation = activation.strip().lower()
             activation_value = TRIGGER_ACTIVATION_MAP.get(normalized_activation)
-            if activation_value is not None:
+            if normalized_source != "software" and activation_value is not None:
                 ret = self.cam.MV_CC_SetEnumValue("TriggerActivation", activation_value)
                 if ret != 0:
-                    raise MvsCameraError(f"Set TriggerActivation failed: {parse_error(ret)}")
+                    if ret == error_constants.MV_E_GC_ACCESS:
+                        logger.warning(
+                            "Skipping TriggerActivation for inaccessible camera node source=%s activation=%s error=%s",
+                            normalized_source,
+                            normalized_activation,
+                            parse_error(ret),
+                        )
+                    else:
+                        raise MvsCameraError(f"Set TriggerActivation failed: {parse_error(ret)}")
 
     def trigger_once(self) -> None:
         """软件触发一次采图。"""

@@ -1,9 +1,13 @@
 """Tests for Hikrobot MVS source parsing."""
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 
 from app.infrastructure.camera.mvs_adapter import MvsCameraAdapter
+from app.infrastructure.camera.mvs.camera_controller import HikCamera
+from app.infrastructure.camera.mvs import camera_controller
 from app.infrastructure.camera.mvs.frame_source import parse_mvs_source
 
 
@@ -50,3 +54,39 @@ def test_mvs_adapter_passes_grab_timeout_to_capture() -> None:
     assert frame is not None
     assert capture.timeout_ms == 4321
     assert adapter.get_status().frames_grabbed == 1
+
+
+def test_software_trigger_does_not_set_trigger_activation() -> None:
+    calls: list[tuple[str, int]] = []
+
+    class FakeCam:
+        def MV_CC_SetEnumValue(self, key, value):
+            calls.append((key, value))
+            return 0
+
+    camera = object.__new__(HikCamera)
+    camera.cam = FakeCam()
+
+    HikCamera.set_trigger_mode(camera, True, source="software", activation="rising_edge")
+
+    assert [key for key, _ in calls] == ["TriggerMode", "TriggerSource"]
+
+
+def test_hardware_trigger_skips_inaccessible_trigger_activation(caplog) -> None:
+    calls: list[tuple[str, int]] = []
+
+    class FakeCam:
+        def MV_CC_SetEnumValue(self, key, value):
+            calls.append((key, value))
+            if key == "TriggerActivation":
+                return camera_controller.error_constants.MV_E_GC_ACCESS
+            return 0
+
+    camera = object.__new__(HikCamera)
+    camera.cam = FakeCam()
+
+    with caplog.at_level(logging.WARNING):
+        HikCamera.set_trigger_mode(camera, True, source="line0", activation="rising_edge")
+
+    assert [key for key, _ in calls] == ["TriggerMode", "TriggerSource", "TriggerActivation"]
+    assert "Skipping TriggerActivation" in caplog.text
