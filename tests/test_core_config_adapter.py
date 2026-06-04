@@ -92,6 +92,30 @@ def test_build_core_config_supports_region_mode(tmp_path: Path) -> None:
     assert camera.regions[1].patchcore is None
 
 
+def test_build_core_config_allows_empty_camera_patchcore_when_regions_exist(tmp_path: Path) -> None:
+    config = build_core_inspection_config(
+        cameras=[
+            {
+                "camera_id": "CAM_A",
+                "source": "./input/CAM_A",
+                "patchcore": {"backbone_weights_path": "./models/backbone.pth"},
+                "regions": [
+                    {
+                        "region_id": "upper",
+                        "box": [0.0, 0.0, 1.0, 0.5],
+                        "patchcore_model_path": "./models/upper_patchcore.npz",
+                    }
+                ],
+            }
+        ],
+        config_dir=tmp_path,
+    )
+
+    camera = config.cameras[0]
+    assert camera.patchcore_model_path == ""
+    assert camera.regions[0].patchcore_model_path == str((tmp_path / "models/upper_patchcore.npz").resolve())
+
+
 def test_build_core_config_rejects_region_patchcore_override(tmp_path: Path) -> None:
     import pytest
 

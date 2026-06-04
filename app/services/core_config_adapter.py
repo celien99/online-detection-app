@@ -58,13 +58,10 @@ def build_core_inspection_config(
 def _camera_config(payload: dict[str, Any], config_dir: Path) -> Any:
     from seat_defect_core.config import CameraConfig
 
+    regions_payload = _list_or_empty(payload.get("regions"))
     return CameraConfig(
         camera_id=_require_string(payload, "camera_id"),
-        patchcore_model_path=_resolve_local_path(
-            config_dir,
-            _require_string(payload, "patchcore_model_path"),
-            force=True,
-        ),
+        patchcore_model_path=_camera_patchcore_model_path(payload, regions_payload, config_dir),
         source=_resolve_source_path(config_dir, _string_or_default(payload.get("source"), "")),
         enabled=_bool_or_default(payload.get("enabled"), True),
         color_insensitive_mode=_bool_or_default(payload.get("color_insensitive_mode"), False),
@@ -75,7 +72,7 @@ def _camera_config(payload: dict[str, Any], config_dir: Path) -> Any:
         color_branch=_color_branch_config(payload.get("color_branch")),
         filter_classifier=_filter_classifier_config(payload.get("filter_classifier"), config_dir),
         rule_engine=_rule_engine_config(payload.get("rule_engine")),
-        regions=_region_configs(payload.get("regions"), config_dir),
+        regions=_region_configs(regions_payload, config_dir),
     )
 
 
@@ -308,6 +305,30 @@ def _rule_config(payload: Any) -> Any:
 
 def _region_configs(payload: Any, config_dir: Path) -> list[Any]:
     return [_region_config(item, config_dir) for item in _list_or_empty(payload)]
+
+
+def _camera_patchcore_model_path(
+    payload: dict[str, Any],
+    regions_payload: list[Any],
+    config_dir: Path,
+) -> str:
+    value = _optional_string(payload.get("patchcore_model_path"))
+    if value is not None:
+        return _resolve_local_path(config_dir, value, force=True)
+    if _has_enabled_region_model(regions_payload):
+        return ""
+    raise ValueError("Missing required config key `patchcore_model_path`")
+
+
+def _has_enabled_region_model(regions_payload: list[Any]) -> bool:
+    for item in regions_payload:
+        if not isinstance(item, dict):
+            continue
+        if item.get("enabled", True) is False:
+            continue
+        if not _is_missing(item.get("patchcore_model_path")):
+            return True
+    return False
 
 
 def _region_config(payload: Any, config_dir: Path) -> Any:
