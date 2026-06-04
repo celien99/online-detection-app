@@ -48,7 +48,24 @@
       "rule_engine": {
         "enabled": true,
         "deployed_rules_path": "./deployed_rules/rules.json"
-      }
+      },
+      "regions": [
+        {
+          "region_id": "upper",
+          "box": [0.03, 0.03, 0.97, 0.42],
+          "patchcore_model_path": "./models/cam_front_upper_patchcore.npz"
+        },
+        {
+          "region_id": "middle",
+          "box": [0.03, 0.38, 0.97, 0.67],
+          "patchcore_model_path": "./models/cam_front_middle_patchcore.npz"
+        },
+        {
+          "region_id": "lower",
+          "box": [0.03, 0.66, 0.97, 0.97],
+          "patchcore_model_path": "./models/cam_front_lower_patchcore.npz"
+        }
+      ]
     }
   ],
   "plc": {

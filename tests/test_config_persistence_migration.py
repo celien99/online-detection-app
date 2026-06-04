@@ -18,6 +18,13 @@ def test_migrate_cameras_from_json(tmp_path: Path):
                 "source": "mvs://1",
                 "enabled": True,
                 "patchcore_model_path": "./models/a.pt",
+                "regions": [
+                    {
+                        "region_id": "upper",
+                        "box": [0.0, 0.0, 1.0, 0.5],
+                        "patchcore_model_path": "./models/a_upper.pt",
+                    }
+                ],
                 "filter_classifier": {"enabled": True, "model_path": "./fc/a/"},
             },
             {
@@ -40,6 +47,7 @@ def test_migrate_cameras_from_json(tmp_path: Path):
     assert cam_a is not None
     assert cam_a["type"] == "mvs"
     assert cam_a["patchcore_model_path"] == "./models/a.pt"
+    assert json.loads(cam_a["regions_json"])[0]["patchcore_model_path"] == "./models/a_upper.pt"
     assert cam_a["filter_classifier_path"] == "./fc/a/"
     assert cam_a["filter_classifier_enabled"] == 1
 

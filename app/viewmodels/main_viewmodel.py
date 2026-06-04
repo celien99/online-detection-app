@@ -210,7 +210,7 @@ class MainViewModel(QObject):
                 new_status = "ng" if cr.status == "NG" else ("warn" if cr.status == "REJECT" else "ok")
                 defect_label = ""
                 if cr.status == "NG":
-                    defect_label = getattr(cr.filter_result, 'class_name', '') if hasattr(cr, 'filter_result') and cr.filter_result else ''
+                    defect_label = _camera_defect_label(cr)
                 if entry["status"] != new_status or entry["defectLabel"] != defect_label:
                     entry["status"] = new_status
                     entry["defectLabel"] = defect_label
@@ -247,8 +247,8 @@ class MainViewModel(QObject):
                     ng_cam = cr
                     break
         if ng_cam is not None:
-            self._ng_defect_type = getattr(ng_cam.filter_result, 'class_name', '') if hasattr(ng_cam, 'filter_result') and ng_cam.filter_result else ''
-            self._ng_confidence = float(ng_cam.texture_result.score) if hasattr(ng_cam, 'texture_result') and ng_cam.texture_result else 0.0
+            self._ng_defect_type = _camera_defect_label(ng_cam)
+            self._ng_confidence = _camera_anomaly_score(ng_cam)
             self._ng_camera_id = ng_cam.camera_id
         self._ng_image_version += 1
         self._ng_visible = True
@@ -300,3 +300,41 @@ class MainViewModel(QObject):
         if self._trigger_error != state.last_error:
             self._trigger_error = state.last_error
             self.triggerErrorChanged.emit()
+
+
+def _camera_defect_label(camera_result: Any) -> str:
+    filter_result = getattr(camera_result, "filter_result", None)
+    class_name = getattr(filter_result, "class_name", "") if filter_result else ""
+    if class_name:
+        return str(class_name)
+    region = _primary_ng_region(camera_result)
+    if region is not None:
+        return f"region:{getattr(region, 'region_id', '')}"
+    return ""
+
+
+def _camera_anomaly_score(camera_result: Any) -> float:
+    texture_result = getattr(camera_result, "texture_result", None)
+    if texture_result is not None:
+        return float(getattr(texture_result, "score", 0.0) or 0.0)
+    region = _primary_ng_region(camera_result)
+    if region is None:
+        return 0.0
+    region_texture = getattr(region, "texture_result", None)
+    if region_texture is None:
+        return 0.0
+    return float(getattr(region_texture, "score", 0.0) or 0.0)
+
+
+def _primary_ng_region(camera_result: Any) -> Any:
+    ng_regions = [
+        region
+        for region in getattr(camera_result, "region_results", []) or []
+        if getattr(region, "status", "") == "NG"
+    ]
+    if not ng_regions:
+        return None
+    return max(
+        ng_regions,
+        key=lambda region: float(getattr(getattr(region, "texture_result", None), "score", 0.0) or 0.0),
+    )

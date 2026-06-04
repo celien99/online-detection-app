@@ -52,6 +52,7 @@ class ConfigPersistenceService:
                 "source": cam.get("source", ""),
                 "enabled": 1 if cam.get("enabled", True) else 0,
                 "patchcore_model_path": cam.get("patchcore_model_path", ""),
+                "regions_json": json.dumps(cam.get("regions", []), ensure_ascii=False),
                 "filter_classifier_path": fc.get("model_path", ""),
                 "filter_classifier_enabled": 1 if fc.get("enabled") else 0,
                 "display_order": idx,
@@ -92,6 +93,7 @@ class ConfigPersistenceService:
                 source TEXT NOT NULL DEFAULT '',
                 enabled INTEGER DEFAULT 1,
                 patchcore_model_path TEXT DEFAULT '',
+                regions_json TEXT DEFAULT '[]',
                 filter_classifier_path TEXT DEFAULT '',
                 filter_classifier_enabled INTEGER DEFAULT 0,
                 display_order INTEGER DEFAULT 0,
@@ -121,6 +123,7 @@ class ConfigPersistenceService:
             CREATE INDEX IF NOT EXISTS idx_model_active ON model_files(camera_id, model_type, is_active);
         """)
         _ensure_camera_patchcore_column(conn)
+        _ensure_camera_regions_column(conn)
         conn.commit()
 
     # ---------------------------------------------------------------- K-V config
@@ -270,15 +273,16 @@ class ConfigPersistenceService:
             conn.execute(
                 """INSERT INTO camera_configs
                    (camera_id, seat_model_id, type, source, enabled,
-                    patchcore_model_path, filter_classifier_path,
+                    patchcore_model_path, regions_json, filter_classifier_path,
                     filter_classifier_enabled,
                     display_order, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     camera["camera_id"], camera["seat_model_id"],
                     camera.get("type", "mvs"), camera.get("source", ""),
                     camera.get("enabled", 1),
                     camera.get("patchcore_model_path", ""),
+                    _regions_to_json(camera.get("regions_json", camera.get("regions"))),
                     camera.get("filter_classifier_path", ""),
                     camera.get("filter_classifier_enabled", 0),
                     camera.get("display_order", 0), now, now,
@@ -289,12 +293,17 @@ class ConfigPersistenceService:
     def update_camera(self, camera_id: str, **kwargs: Any) -> None:
         allowed = {
             "type", "source", "enabled", "patchcore_model_path",
+            "regions_json", "regions",
             "filter_classifier_path", "filter_classifier_enabled",
             "display_order",
         }
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return
+        if "regions" in updates:
+            updates["regions_json"] = _regions_to_json(updates.pop("regions"))
+        if "regions_json" in updates:
+            updates["regions_json"] = _regions_to_json(updates["regions_json"])
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         values = list(updates.values()) + [camera_id]
@@ -418,6 +427,23 @@ def _ensure_camera_patchcore_column(conn: sqlite3.Connection) -> None:
     }
     if "patchcore_model_path" not in columns:
         conn.execute("ALTER TABLE camera_configs ADD COLUMN patchcore_model_path TEXT DEFAULT ''")
+
+
+def _ensure_camera_regions_column(conn: sqlite3.Connection) -> None:
+    columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(camera_configs)").fetchall()
+    }
+    if "regions_json" not in columns:
+        conn.execute("ALTER TABLE camera_configs ADD COLUMN regions_json TEXT DEFAULT '[]'")
+
+
+def _regions_to_json(value: Any) -> str:
+    if value is None:
+        return "[]"
+    if isinstance(value, str):
+        return value or "[]"
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _set_nested(data: dict, key: str, value: str) -> None:

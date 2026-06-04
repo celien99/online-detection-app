@@ -39,10 +39,10 @@ def build_core_inspection_config(
     from seat_defect_core.config import (
         InspectionConfig,
     )
+    from seat_defect_core.runtime_config import validate_inspection_config
 
-    validate_regions_unsupported(cameras)
     root = (config_dir or Path.cwd()).resolve()
-    return InspectionConfig(
+    config = InspectionConfig(
         cameras=[_camera_config(camera, root) for camera in cameras],
         output_json_path=_resolve_local_path(root, output_json_path, force=True),
         debug_dir=_resolve_local_path(root, debug_dir, force=True),
@@ -51,12 +51,13 @@ def build_core_inspection_config(
         part_id=str(part_id or "seat_demo"),
         upload_base_url=str(upload_base_url) if upload_base_url else None,
     )
+    validate_inspection_config(config)
+    return config
 
 
 def _camera_config(payload: dict[str, Any], config_dir: Path) -> Any:
     from seat_defect_core.config import CameraConfig
 
-    _reject_regions(payload)
     return CameraConfig(
         camera_id=_require_string(payload, "camera_id"),
         patchcore_model_path=_resolve_local_path(
@@ -74,26 +75,7 @@ def _camera_config(payload: dict[str, Any], config_dir: Path) -> Any:
         color_branch=_color_branch_config(payload.get("color_branch")),
         filter_classifier=_filter_classifier_config(payload.get("filter_classifier"), config_dir),
         rule_engine=_rule_engine_config(payload.get("rule_engine")),
-        regions=[],
-    )
-
-
-def validate_regions_unsupported(cameras: list[dict[str, Any]]) -> None:
-    """Reject region-mode configs at the online app boundary."""
-    for camera in cameras:
-        _reject_regions(camera)
-
-
-def _reject_regions(payload: dict[str, Any]) -> None:
-    regions = payload.get("regions")
-    if regions is None:
-        return
-    if isinstance(regions, list) and not regions:
-        return
-    camera_id = str(payload.get("camera_id", "<unknown>"))
-    raise ValueError(
-        "regions mode is not supported by online detection app"
-        f" for camera {camera_id}"
+        regions=_region_configs(payload.get("regions"), config_dir),
     )
 
 
@@ -333,7 +315,11 @@ def _region_config(payload: Any, config_dir: Path) -> Any:
 
     if not isinstance(payload, dict):
         raise TypeError("regions items must be objects")
-    patchcore_payload = payload.get("patchcore")
+    if "patchcore" in payload:
+        raise ValueError(
+            "region-level patchcore config is not supported by the app; "
+            "configure camera-level patchcore once per camera"
+        )
     return RegionConfig(
         region_id=_require_string(payload, "region_id"),
         box=_region_box(payload.get("box")),
@@ -343,9 +329,7 @@ def _region_config(payload: Any, config_dir: Path) -> Any:
             force=True,
         ),
         enabled=_bool_or_default(payload.get("enabled"), True),
-        patchcore=_patchcore_config(patchcore_payload, config_dir)
-        if isinstance(patchcore_payload, dict)
-        else None,
+        patchcore=None,
     )
 
 

@@ -155,6 +155,18 @@ class ProductionDiagnostics:
                 ("PatchCore 模型", cam.get("patchcore_model_path")),
                 ("规则文件", cam.get("rule_engine", {}).get("deployed_rules_path") if cam.get("rule_engine", {}).get("enabled") else None),
             ]
+            for region in cam.get("regions", []) or []:
+                if not isinstance(region, dict):
+                    continue
+                if region.get("enabled", True) is False:
+                    continue
+                region_id = region.get("region_id", "<unknown>")
+                checks.append(
+                    (
+                        f"region {region_id} PatchCore 模型",
+                        region.get("patchcore_model_path"),
+                    )
+                )
             if cam.get("filter_classifier", {}).get("enabled"):
                 checks.append(("过滤分类器", cam.get("filter_classifier", {}).get("model_path")))
             for label, raw_path in checks:

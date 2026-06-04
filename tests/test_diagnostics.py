@@ -58,6 +58,79 @@ def test_diagnostics_reports_missing_model_files(tmp_path: Path) -> None:
     assert any(item.name == "CAM_A PatchCore 模型" and item.status == "FAIL" for item in report.items)
 
 
+def test_diagnostics_reports_missing_region_model_files(tmp_path: Path) -> None:
+    model_path = tmp_path / "camera.pt"
+    model_path.write_bytes(b"model")
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "triggered"},
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "file_watcher",
+                    "enabled": True,
+                    "watch_dir": str(tmp_path),
+                    "patchcore_model_path": str(model_path),
+                    "regions": [
+                        {
+                            "region_id": "upper",
+                            "box": [0.0, 0.0, 1.0, 0.5],
+                            "patchcore_model_path": "./missing_region.pt",
+                        }
+                    ],
+                }
+            ],
+            "line_signal": {"enabled": True, "type": "modbus", "host": "127.0.0.1", "port": 502},
+            "storage": {"log_dir": str(tmp_path), "screenshot_dir": str(tmp_path)},
+        },
+    )
+
+    report = ProductionDiagnostics(ConfigStore(str(config_path)), config_path).run()
+
+    assert report.status == "FAIL"
+    assert any(
+        "CAM_A region upper PatchCore" in item.name and item.status == "FAIL"
+        for item in report.items
+    )
+
+
+def test_diagnostics_ignores_disabled_region_model_files(tmp_path: Path) -> None:
+    model_path = tmp_path / "camera.pt"
+    model_path.write_bytes(b"model")
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "triggered"},
+            "cameras": [
+                {
+                    "camera_id": "CAM_A",
+                    "type": "file_watcher",
+                    "enabled": True,
+                    "watch_dir": str(tmp_path),
+                    "patchcore_model_path": str(model_path),
+                    "regions": [
+                        {
+                            "region_id": "upper",
+                            "box": [0.0, 0.0, 1.0, 0.5],
+                            "patchcore_model_path": "./missing_region.pt",
+                            "enabled": False,
+                        }
+                    ],
+                }
+            ],
+            "line_signal": {"enabled": True, "type": "modbus", "host": "127.0.0.1", "port": 502},
+            "storage": {"log_dir": str(tmp_path), "screenshot_dir": str(tmp_path)},
+        },
+    )
+
+    report = ProductionDiagnostics(ConfigStore(str(config_path)), config_path).run()
+
+    assert not any("CAM_A region upper PatchCore" in item.name for item in report.items)
+
+
 def test_diagnostics_warns_when_triggered_line_signal_disabled(tmp_path: Path) -> None:
     model_path = tmp_path / "model.pt"
     model_path.write_bytes(b"model")

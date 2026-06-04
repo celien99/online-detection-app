@@ -94,6 +94,13 @@ class InspectionService:
             detection = cam.get("detection", {})
             if detection.get("model_path") or cam.get("patchcore_model_path"):
                 return False
+            if any(
+                isinstance(region, dict)
+                and region.get("enabled", True) is not False
+                and region.get("patchcore_model_path")
+                for region in cam.get("regions", []) or []
+            ):
+                return False
             if cam.get("filter_classifier", {}).get("enabled"):
                 return False
         return True

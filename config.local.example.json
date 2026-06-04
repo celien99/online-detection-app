@@ -42,7 +42,24 @@
       "rule_engine": {
         "enabled": false,
         "deployed_rules_path": ""
-      }
+      },
+      "regions": [
+        {
+          "region_id": "upper",
+          "box": [0.03, 0.03, 0.97, 0.42],
+          "patchcore_model_path": ""
+        },
+        {
+          "region_id": "middle",
+          "box": [0.03, 0.38, 0.97, 0.67],
+          "patchcore_model_path": ""
+        },
+        {
+          "region_id": "lower",
+          "box": [0.03, 0.66, 0.97, 0.97],
+          "patchcore_model_path": ""
+        }
+      ]
     }
   ],
   "plc": {

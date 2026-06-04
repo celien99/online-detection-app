@@ -1,6 +1,7 @@
 """Seat model CRUD and camera association management."""
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List
 
 from app.services.config_persistence import ConfigPersistenceService
@@ -61,6 +62,7 @@ class SeatModelService:
                 "type": cam["type"],
                 "enabled": bool(cam["enabled"]),
                 "patchcore_model_path": cam.get("patchcore_model_path", ""),
+                "regions": _decode_regions(cam.get("regions_json")),
                 "filter_classifier": {
                     "enabled": bool(cam.get("filter_classifier_enabled", False)),
                     "model_path": cam.get("filter_classifier_path", ""),
@@ -68,3 +70,19 @@ class SeatModelService:
             }
             result.append(entry)
         return result
+
+
+def _decode_regions(value: Any) -> list[dict[str, Any]]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return [dict(item) for item in value if isinstance(item, dict)]
+    if not isinstance(value, str):
+        return []
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [dict(item) for item in payload if isinstance(item, dict)]

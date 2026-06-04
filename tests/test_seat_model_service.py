@@ -70,6 +70,13 @@ def test_get_cameras_as_config_list(tmp_path: Path):
     svc.add_camera("m1", {
         "camera_id": "cam1", "type": "mvs", "source": "mvs://1",
         "filter_classifier_path": "./fc/", "filter_classifier_enabled": True,
+        "regions": [
+            {
+                "region_id": "upper",
+                "box": [0.0, 0.0, 1.0, 0.5],
+                "patchcore_model_path": "./models/cam1_upper.pt",
+            }
+        ],
     })
     configs = svc.get_cameras_as_config_list("m1")
     assert len(configs) == 1
@@ -77,6 +84,8 @@ def test_get_cameras_as_config_list(tmp_path: Path):
     assert cfg["camera_id"] == "cam1"
     assert cfg["filter_classifier"]["enabled"] is True
     assert cfg["filter_classifier"]["model_path"] == "./fc/"
+    assert cfg["regions"][0]["region_id"] == "upper"
+    assert cfg["regions"][0]["patchcore_model_path"] == "./models/cam1_upper.pt"
 
 
 def test_remove_camera(tmp_path: Path):
@@ -95,3 +104,23 @@ def test_update_camera(tmp_path: Path):
     cam = svc.get_cameras("m1")[0]
     assert cam["patchcore_model_path"] == "./models/new.pt"
     assert cam["enabled"] == 0
+
+
+def test_update_camera_regions(tmp_path: Path):
+    svc = _setup(tmp_path)
+    svc.create_model("m1", "A")
+    svc.add_camera("m1", {"camera_id": "cam1", "type": "mvs", "source": "mvs://1"})
+    svc.update_camera(
+        "cam1",
+        regions=[
+            {
+                "region_id": "lower",
+                "box": [0.0, 0.5, 1.0, 1.0],
+                "patchcore_model_path": "./models/lower.pt",
+            }
+        ],
+    )
+
+    cfg = svc.get_cameras_as_config_list("m1")[0]
+    assert cfg["regions"][0]["region_id"] == "lower"
+    assert cfg["regions"][0]["patchcore_model_path"] == "./models/lower.pt"

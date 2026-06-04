@@ -254,3 +254,71 @@ class TestInspectionService:
         assert captured["camera_ids"] == ["CAM_MODEL"]
         assert svc.active_seat_model_id() == "MODEL_A"
         svc.shutdown()
+
+    def test_region_models_disable_mock_runtime(self, tmp_path: Path) -> None:
+        from app.services.inspection_service import InspectionService
+
+        config_path = tmp_path / "config.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "app": {"mock_runtime_enabled": True},
+                    "cameras": [
+                        {
+                            "camera_id": "CAM_REGION",
+                            "type": "file_watcher",
+                            "enabled": True,
+                            "patchcore_model_path": "",
+                            "regions": [
+                                {
+                                    "region_id": "upper",
+                                    "box": [0.0, 0.0, 1.0, 0.5],
+                                    "patchcore_model_path": "./region_model.npz",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        svc = InspectionService(ConfigStore(str(config_path)))
+
+        assert svc._can_use_mock_runtime() is False
+        svc.shutdown()
+
+    def test_disabled_region_models_do_not_disable_mock_runtime(self, tmp_path: Path) -> None:
+        from app.services.inspection_service import InspectionService
+
+        config_path = tmp_path / "config.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "app": {"mock_runtime_enabled": True},
+                    "cameras": [
+                        {
+                            "camera_id": "CAM_REGION",
+                            "type": "file_watcher",
+                            "enabled": True,
+                            "patchcore_model_path": "",
+                            "filter_classifier": {"enabled": False},
+                            "regions": [
+                                {
+                                    "region_id": "upper",
+                                    "box": [0.0, 0.0, 1.0, 0.5],
+                                    "patchcore_model_path": "./region_model.npz",
+                                    "enabled": False,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        svc = InspectionService(ConfigStore(str(config_path)))
+
+        assert svc._can_use_mock_runtime() is True
+        svc.shutdown()

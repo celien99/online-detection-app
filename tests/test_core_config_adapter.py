@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from app.services.core_config_adapter import build_core_inspection_config
 
 
@@ -59,8 +57,93 @@ def test_build_core_config_ignores_capture_fields_and_resolves_paths(tmp_path: P
     assert camera.regions == []
 
 
-def test_build_core_config_rejects_region_mode(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="regions mode is not supported by online detection app"):
+def test_build_core_config_supports_region_mode(tmp_path: Path) -> None:
+    config = build_core_inspection_config(
+        cameras=[
+            {
+                "camera_id": "CAM_A",
+                "source": "./input/CAM_A",
+                "patchcore_model_path": "./models/cam_a_patchcore.npz",
+                "patchcore": {"backbone_weights_path": "./models/backbone.pth"},
+                "regions": [
+                    {
+                        "region_id": "upper",
+                        "box": [0.0, 0.0, 1.0, 0.5],
+                        "patchcore_model_path": "./models/upper_patchcore.npz",
+                    },
+                    {
+                        "region_id": "lower",
+                        "box": [0.0, 0.5, 1.0, 1.0],
+                        "patchcore_model_path": "./models/lower_patchcore.npz",
+                    },
+                ],
+            }
+        ],
+        config_dir=tmp_path,
+    )
+
+    camera = config.cameras[0]
+    assert len(camera.regions) == 2
+    upper = camera.regions[0]
+    assert upper.region_id == "upper"
+    assert upper.box == [0.0, 0.0, 1.0, 0.5]
+    assert upper.patchcore_model_path == str((tmp_path / "models/upper_patchcore.npz").resolve())
+    assert upper.patchcore is None
+    assert camera.regions[1].patchcore is None
+
+
+def test_build_core_config_rejects_region_patchcore_override(tmp_path: Path) -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="region-level patchcore"):
+        build_core_inspection_config(
+            cameras=[
+                {
+                    "camera_id": "CAM_A",
+                    "source": "./input/CAM_A",
+                    "patchcore_model_path": "./models/cam_a_patchcore.npz",
+                    "patchcore": {"backbone_weights_path": "./models/backbone.pth"},
+                    "regions": [
+                        {
+                            "region_id": "upper",
+                            "box": [0.0, 0.0, 1.0, 0.5],
+                            "patchcore_model_path": "./models/upper_patchcore.npz",
+                            "patchcore": {"image_size": 192},
+                        }
+                    ],
+                }
+            ],
+            config_dir=tmp_path,
+        )
+
+
+def test_build_core_config_validates_region_box(tmp_path: Path) -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="region box must satisfy"):
+        build_core_inspection_config(
+            cameras=[
+                {
+                    "camera_id": "CAM_A",
+                    "source": "./input/CAM_A",
+                    "patchcore_model_path": "./models/cam_a_patchcore.npz",
+                    "regions": [
+                        {
+                            "region_id": "upper",
+                            "box": [0.5, 0.0, 0.5, 1.0],
+                            "patchcore_model_path": "./models/upper_patchcore.npz",
+                        }
+                    ],
+                }
+            ],
+            config_dir=tmp_path,
+        )
+
+
+def test_build_core_config_validates_duplicate_region_ids(tmp_path: Path) -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="region_id"):
         build_core_inspection_config(
             cameras=[
                 {
@@ -72,7 +155,12 @@ def test_build_core_config_rejects_region_mode(tmp_path: Path) -> None:
                             "region_id": "upper",
                             "box": [0.0, 0.0, 1.0, 0.5],
                             "patchcore_model_path": "./models/upper_patchcore.npz",
-                        }
+                        },
+                        {
+                            "region_id": "upper",
+                            "box": [0.0, 0.5, 1.0, 1.0],
+                            "patchcore_model_path": "./models/upper_2_patchcore.npz",
+                        },
                     ],
                 }
             ],

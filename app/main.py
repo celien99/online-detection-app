@@ -67,6 +67,23 @@ def _should_send_legacy_plc_defect(runtime_mode: str, line_config: Dict[str, Any
     return True
 
 
+def _iter_patchcore_model_paths(cameras: list[dict[str, Any]]) -> list[str]:
+    paths: list[str] = []
+    for cam in cameras:
+        patchcore_path = cam.get("patchcore_model_path", "")
+        if patchcore_path:
+            paths.append(str(patchcore_path))
+        for region in cam.get("regions", []) or []:
+            if not isinstance(region, dict):
+                continue
+            if region.get("enabled", True) is False:
+                continue
+            region_path = region.get("patchcore_model_path", "")
+            if region_path:
+                paths.append(str(region_path))
+    return paths
+
+
 class QmlHotReload:
     """Watches QML files and sets a flag when changes are detected.
 
@@ -202,9 +219,8 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
             fc = cam.get("filter_classifier", {})
             if fc.get("enabled") and fc.get("model_path"):
                 hot_reload.watch(fc["model_path"])
-            patchcore_path = cam.get("patchcore_model_path", "")
-            if patchcore_path:
-                hot_reload.watch(patchcore_path)
+        for patchcore_path in _iter_patchcore_model_paths(config.get_camera_configs()):
+            hot_reload.watch(patchcore_path)
         hot_reload.on_change(lambda: setattr(inspection_service, '_inspector', None))
         hot_reload.start()
 
@@ -289,9 +305,8 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
             fc = cam.get("filter_classifier", {})
             if fc.get("enabled") and fc.get("model_path"):
                 hot_reload.watch(fc["model_path"])
-            patchcore_path = cam.get("patchcore_model_path", "")
-            if patchcore_path:
-                hot_reload.watch(patchcore_path)
+        for patchcore_path in _iter_patchcore_model_paths(cameras):
+            hot_reload.watch(patchcore_path)
 
     seat_model_vm = SeatModelViewModel(seat_model_service, on_switch=_on_seat_model_switch)
     model_deploy_vm = ModelDeployViewModel(model_file_service, platform_sync)
