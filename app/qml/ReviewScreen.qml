@@ -10,6 +10,35 @@ Rectangle {
 
     property var reviewModel: []
     property var viewModel: null
+    property int pendingRecordId: -1
+    property string pendingAction: ""
+
+    IndustrialDialog {
+        id: actionConfirmDialog
+        title: reviewScreen.pendingAction === "defect" ? qsTr("确认缺陷") : qsTr("忽略误报")
+        acceptText: qsTr("确认")
+        onAccepted: {
+            if (reviewScreen.viewModel && reviewScreen.pendingRecordId >= 0) {
+                if (reviewScreen.pendingAction === "defect") {
+                    reviewScreen.viewModel.confirmAsDefect(reviewScreen.pendingRecordId)
+                } else {
+                    reviewScreen.viewModel.dismissAsOK(reviewScreen.pendingRecordId)
+                }
+            }
+            reviewScreen.pendingRecordId = -1
+            reviewScreen.pendingAction = ""
+        }
+
+        Text {
+            Layout.fillWidth: true
+            text: reviewScreen.pendingAction === "defect"
+                  ? qsTr("该记录将按真实缺陷计入日志。")
+                  : qsTr("该记录将按误报忽略，不再进入待复核队列。")
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontSizeSM
+            wrapMode: Text.Wrap
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -80,6 +109,8 @@ Rectangle {
                                 color: Theme.textPrimary
                                 font.pixelSize: Theme.fontSizeSM
                                 font.bold: true
+                                elide: Text.ElideRight
+                                Layout.maximumWidth: 180
                             }
                             StatusBadge {
                                 badgeText: modelData.status || ""
@@ -92,12 +123,16 @@ Rectangle {
                                   + (modelData.confidence ? modelData.confidence.toFixed(3) : "0.000")
                             color: Theme.textSecondary
                             font.pixelSize: Theme.fontSizeXS
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
                         }
                         Text {
                             text: qsTr("时间: ")
                                   + (modelData.timestamp ? new Date(modelData.timestamp * 1000).toLocaleString(Qt.locale()) : "")
                             color: Theme.textMuted
                             font.pixelSize: Theme.fontSizeXS
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
                         }
                     }
 
@@ -112,7 +147,9 @@ Rectangle {
                             implicitWidth: 90
                             font.pixelSize: Theme.fontSizeXS
                             onClicked: {
-                                if (reviewScreen.viewModel) reviewScreen.viewModel.confirmAsDefect(modelData.id);
+                                reviewScreen.pendingRecordId = modelData.id
+                                reviewScreen.pendingAction = "defect"
+                                actionConfirmDialog.open()
                             }
                         }
                         ActionButton {
@@ -122,7 +159,9 @@ Rectangle {
                             implicitWidth: 90
                             font.pixelSize: Theme.fontSizeXS
                             onClicked: {
-                                if (reviewScreen.viewModel) reviewScreen.viewModel.dismissAsOK(modelData.id);
+                                reviewScreen.pendingRecordId = modelData.id
+                                reviewScreen.pendingAction = "ok"
+                                actionConfirmDialog.open()
                             }
                         }
                     }
@@ -130,31 +169,14 @@ Rectangle {
             }
         }
 
-        // Empty state
-        Rectangle {
+        EmptyState {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Theme.bgCard
-            radius: Theme.radiusMD
-            border { width: 1; color: Theme.borderDefault }
             visible: reviewScreen.reviewModel.length === 0
-
-            Column {
-                anchors.centerIn: parent
-                spacing: Theme.spacingSM
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: qsTr("暂无待复核记录")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSizeMD
-                }
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: qsTr('在 NG 弹窗中标记“待复核”的记录会出现在这里')
-                    color: Theme.textMuted
-                    font.pixelSize: Theme.fontSizeSM
-                }
-            }
+            title: qsTr("暂无待复核记录")
+            message: qsTr("在 NG 弹窗中标记“待复核”的记录会出现在这里。")
+            badgeText: qsTr("REVIEW")
+            accentColor: Theme.statusOK
         }
     }
 }

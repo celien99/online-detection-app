@@ -22,6 +22,7 @@ Rectangle {
 
     Connections {
         target: modelDeployScreen.viewModel
+        ignoreUnknownSignals: true
         function onToast(message, level) { toast.show(message, level); }
     }
 
@@ -43,37 +44,21 @@ Rectangle {
                 font.bold: true
             }
             Item { Layout.fillWidth: true }
-            Rectangle {
-                radius: Theme.radiusSM
-                color: Theme.accentDim
-                implicitWidth: 130; implicitHeight: 36
-                Text {
-                    anchors.centerIn: parent
-                    text: qsTr("📂 手动导入")
-                    color: Theme.accent
-                    font.pixelSize: Theme.fontSizeSM
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: importDialog.open()
-                }
+            ActionButton {
+                buttonText: qsTr("手动导入")
+                bgColor: Theme.bgTertiary
+                Layout.preferredWidth: 112
+                implicitHeight: 36
+                onClicked: importDialog.open()
             }
-            Rectangle {
-                radius: Theme.radiusSM
-                color: Theme.accentGreenDim
-                implicitWidth: 150; implicitHeight: 36
-                Text {
-                    anchors.centerIn: parent
-                    text: qsTr("🔄 从离线平台同步")
-                    color: Theme.accentGreen
-                    font.pixelSize: Theme.fontSizeSM
-                    font.bold: true
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (modelDeployScreen.viewModel) modelDeployScreen.viewModel.syncFromPlatform();
-                    }
+            ActionButton {
+                buttonText: qsTr("从离线平台同步")
+                bgColor: Theme.accentGreen
+                textColor: "#000000"
+                Layout.preferredWidth: 150
+                implicitHeight: 36
+                onClicked: {
+                    if (modelDeployScreen.viewModel) modelDeployScreen.viewModel.syncFromPlatform();
                 }
             }
         }
@@ -94,16 +79,24 @@ Rectangle {
                     radius: Theme.radiusMD
                     border { width: 1; color: Theme.cardGlassBorder }
                     ColumnLayout {
-                        anchors.centerIn: parent
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.spacingMD
+                        anchors.rightMargin: Theme.spacingMD
                         spacing: 4
                         Text {
                             Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
                             text: modelData.label
                             color: Theme.textSecondary
                             font.pixelSize: Theme.fontSizeXS
+                            elide: Text.ElideRight
+                            horizontalAlignment: Text.AlignHCenter
                         }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
                             text: {
                                 if (modelData.valueKey === "syncStatus") return modelDeployScreen.viewModel ? modelDeployScreen.viewModel.syncStatus : "offline";
                                 if (modelData.valueKey === "modelCount") return modelDeployScreen.viewModel ? String(modelDeployScreen.viewModel.modelFiles.length) : "0";
@@ -113,6 +106,8 @@ Rectangle {
                             color: modelData.color
                             font.pixelSize: Theme.fontSizeSM
                             font.bold: true
+                            elide: Text.ElideRight
+                            horizontalAlignment: Text.AlignHCenter
                         }
                     }
                 }
@@ -143,90 +138,107 @@ Rectangle {
             }
         }
 
-        ListView {
-            id: fileList
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            model: modelDeployScreen.viewModel ? modelDeployScreen.viewModel.modelFiles : []
-            spacing: Theme.spacingSM
 
-            delegate: Rectangle {
-                width: ListView.view.width
-                implicitHeight: 72
-                color: modelData.is_active ? Theme.accentGreenDim : Theme.cardGlass
-                radius: Theme.radiusMD
-                border { width: 1; color: modelData.is_active ? Theme.accentGreen : Theme.cardGlassBorder }
+            ListView {
+                id: fileList
+                anchors.fill: parent
+                model: modelDeployScreen.viewModel ? modelDeployScreen.viewModel.modelFiles : []
+                spacing: Theme.spacingSM
+                visible: count > 0
+                clip: true
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMD
-                    spacing: Theme.spacingMD
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
-                        Text {
-                            text: modelData.file_name || modelData.id
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeSM
-                            font.bold: true
-                        }
-                        RowLayout {
-                            spacing: Theme.spacingSM
-                            Text { text: modelData.camera_id || ""; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
-                            Text { text: modelData.model_type || ""; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
-                            Text {
-                                text: modelData.platform_version ? ("v" + modelData.platform_version) : ""
-                                color: Theme.accent
-                                font.pixelSize: Theme.fontSizeXS
-                                visible: text !== ""
-                            }
-                            Text {
-                                text: modelData.sha256 ? modelData.sha256.substring(0, 8) + "..." : ""
-                                color: Theme.textMuted
-                                font.pixelSize: Theme.fontSizeXS
-                                visible: text !== ""
-                            }
-                        }
-                    }
+                delegate: Rectangle {
+                    width: ListView.view.width
+                    implicitHeight: 72
+                    color: modelData.is_active ? Theme.accentGreenDim : Theme.cardGlass
+                    radius: Theme.radiusMD
+                    border { width: 1; color: modelData.is_active ? Theme.accentGreen : Theme.cardGlassBorder }
 
                     RowLayout {
-                        spacing: Theme.spacingXS
-                        Rectangle {
-                            radius: Theme.radiusSM
-                            color: modelData.is_active ? Theme.bgTertiary : Theme.accentGreenDim
-                            implicitWidth: modelData.is_active ? 56 : 48
-                            implicitHeight: 28
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacingMD
+                        spacing: Theme.spacingMD
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
                             Text {
-                                anchors.centerIn: parent
-                                text: modelData.is_active ? qsTr("已激活") : qsTr("激活")
-                                color: modelData.is_active ? Theme.textMuted : Theme.accentGreen
-                                font.pixelSize: Theme.fontSizeXS
+                                text: modelData.file_name || modelData.id
+                                color: Theme.textPrimary
+                                font.pixelSize: Theme.fontSizeSM
+                                font.bold: true
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
                             }
-                            MouseArea {
-                                anchors.fill: parent
-                                enabled: !modelData.is_active
-                                onClicked: modelDeployScreen.viewModel.activateVersion(modelData.id)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Theme.spacingSM
+                                Text {
+                                    text: modelData.camera_id || ""
+                                    color: Theme.textSecondary
+                                    font.pixelSize: Theme.fontSizeXS
+                                    Layout.maximumWidth: 160
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: modelData.model_type || ""
+                                    color: Theme.textMuted
+                                    font.pixelSize: Theme.fontSizeXS
+                                    Layout.maximumWidth: 180
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: modelData.platform_version ? ("v" + modelData.platform_version) : ""
+                                    color: Theme.accent
+                                    font.pixelSize: Theme.fontSizeXS
+                                    visible: text !== ""
+                                }
+                                Text {
+                                    text: modelData.sha256 ? modelData.sha256.substring(0, 8) + "..." : ""
+                                    color: Theme.textMuted
+                                    font.pixelSize: Theme.fontSizeXS
+                                    visible: text !== ""
+                                }
                             }
                         }
-                        Rectangle {
-                            radius: Theme.radiusSM
-                            color: Qt.rgba(0.973, 0.318, 0.286, 0.1)
-                            implicitWidth: 40; implicitHeight: 28
-                            visible: !modelData.is_active
-                            Text {
-                                anchors.centerIn: parent
-                                text: qsTr("删除")
-                                color: Theme.statusNG
+
+                        RowLayout {
+                            spacing: Theme.spacingXS
+                            ActionButton {
+                                buttonText: modelData.is_active ? qsTr("已激活") : qsTr("激活")
+                                bgColor: modelData.is_active ? Theme.bgTertiary : Theme.accentGreen
+                                textColor: modelData.is_active ? Theme.textMuted : "#000000"
+                                implicitWidth: modelData.is_active ? 68 : 56
+                                implicitHeight: 28
+                                enabled: !modelData.is_active
                                 font.pixelSize: Theme.fontSizeXS
+                                onClicked: modelDeployScreen.viewModel.activateVersion(modelData.id)
                             }
-                            MouseArea {
-                                anchors.fill: parent
+                            ActionButton {
+                                visible: !modelData.is_active
+                                buttonText: qsTr("删除")
+                                bgColor: Qt.rgba(0.973, 0.318, 0.286, 0.16)
+                                textColor: Theme.statusNG
+                                implicitWidth: 52
+                                implicitHeight: 28
+                                font.pixelSize: Theme.fontSizeXS
                                 onClicked: modelDeployScreen.viewModel.deleteModelFile(modelData.id)
                             }
                         }
                     }
                 }
+            }
+
+            EmptyState {
+                anchors.fill: parent
+                visible: fileList.count === 0
+                title: qsTr("暂无模型文件")
+                message: qsTr("可手动导入模型文件，或从离线平台同步可用版本。")
+                badgeText: qsTr("MODEL")
+                accentColor: Theme.accent
             }
         }
     }
@@ -279,9 +291,18 @@ Rectangle {
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: 38
-                color: Theme.cardGlass
+                color: importTypeMouse.pressed ? Qt.rgba(1, 1, 1, 0.10)
+                       : importTypeMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.06)
+                       : Theme.cardGlass
                 radius: Theme.radiusSM
-                border { width: 1; color: Theme.cardGlassBorder }
+                border {
+                    width: 1
+                    color: importTypePopup.visible ? Theme.accent
+                           : importTypeMouse.containsMouse ? Theme.borderStrong
+                           : Theme.cardGlassBorder
+                }
+                Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
                 Text {
                     id: importTypeLabel
@@ -297,11 +318,13 @@ Rectangle {
                     anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
                     text: "▼"
-                    color: Theme.textSecondary
+                    color: importTypePopup.visible ? Theme.accent : Theme.textSecondary
                     font.pixelSize: 9
                 }
                 MouseArea {
+                    id: importTypeMouse
                     anchors.fill: parent
+                    hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: importTypePopup.open()
                 }
@@ -326,7 +349,7 @@ Rectangle {
                                 implicitHeight: 34
                                 radius: Theme.radiusSM
                                 color: importTypeCombo.currentIndex === index ? Theme.accentDim
-                                       : (hoverHandler.containsMouse ? Qt.rgba(1, 1, 1, 0.06) : "transparent")
+                                       : (hoverHandler.containsMouse ? (hoverHandler.pressed ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(1, 1, 1, 0.06)) : "transparent")
                                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
                                 Text {
                                     anchors.left: parent.left

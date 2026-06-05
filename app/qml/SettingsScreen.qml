@@ -79,13 +79,19 @@ Rectangle {
         implicitWidth: 120
         implicitHeight: 28
         radius: height / 2
-        color: toggleRoot.checked ? Theme.statusOKDim : Theme.bgTertiary
+        color: toggleMouse.pressed ? Qt.rgba(1, 1, 1, 0.10)
+               : toggleMouse.containsMouse ? (toggleRoot.checked ? Qt.rgba(0.247, 0.725, 0.314, 0.26) : Qt.rgba(1, 1, 1, 0.07))
+               : toggleRoot.checked ? Theme.statusOKDim
+               : Theme.bgTertiary
         border {
             width: 1
-            color: toggleRoot.checked ? Theme.statusOK : Theme.borderDefault
+            color: toggleRoot.checked ? Theme.statusOK
+                   : toggleMouse.containsMouse ? Theme.borderStrong
+                   : Theme.borderDefault
         }
 
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
         Text {
             anchors.left: parent.left
@@ -98,7 +104,9 @@ Rectangle {
         }
 
         MouseArea {
+            id: toggleMouse
             anchors.fill: parent
+            hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: {
                 var newVal = !toggleRoot.checked;
@@ -159,10 +167,18 @@ Rectangle {
 
         implicitHeight: 36
         implicitWidth: 280
-        color: comboMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.06) : Theme.cardGlass
+        color: comboMouse.pressed ? Qt.rgba(1, 1, 1, 0.10)
+               : comboMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.06)
+               : Theme.cardGlass
         radius: Theme.radiusSM
-        border { width: 1; color: comboPopup.visible ? Theme.accent : Theme.cardGlassBorder }
+        border {
+            width: 1
+            color: comboPopup.visible ? Theme.accent
+                   : comboMouse.containsMouse ? Theme.borderStrong
+                   : Theme.cardGlassBorder
+        }
 
+        Behavior on color { ColorAnimation { duration: Theme.animFast } }
         Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
         function displayTextFor(val) {
@@ -251,7 +267,7 @@ Rectangle {
                             if (comboRoot.actualFor(modelData) === comboRoot.currentValue)
                                 return Theme.accentDim;
                             if (hoverHandler.containsMouse)
-                                return Qt.rgba(1, 1, 1, 0.06);
+                                return hoverHandler.pressed ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(1, 1, 1, 0.06);
                             return "transparent";
                         }
 
@@ -332,10 +348,20 @@ Rectangle {
                     currentIndex: settingsScreen.selectedIndex
 
                     delegate: Rectangle {
+                        id: navItem
                         width: navList.width - 8
                         height: 44
-                        color: index === navList.currentIndex ? Theme.bgTertiary : "transparent"
+                        color: index === navList.currentIndex ? Theme.bgTertiary
+                               : navMouse.pressed ? Qt.rgba(1, 1, 1, 0.08)
+                               : navMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.05)
+                               : "transparent"
                         radius: Theme.radiusSM
+                        border {
+                            width: navMouse.containsMouse && index !== navList.currentIndex ? 1 : 0
+                            color: Theme.borderDefault
+                        }
+
+                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
                         Rectangle {
                             visible: index === navList.currentIndex
@@ -356,7 +382,9 @@ Rectangle {
                         }
 
                         MouseArea {
+                            id: navMouse
                             anchors.fill: parent
+                            hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: settingsScreen.selectedIndex = index
                         }
@@ -450,6 +478,21 @@ Rectangle {
                                             Layout.fillWidth: true
                                             Layout.preferredHeight: 32
 
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: -Theme.spacingSM
+                                                anchors.rightMargin: -Theme.spacingSM
+                                                radius: Theme.radiusSM
+                                                color: camHeaderMouse.pressed ? Qt.rgba(1, 1, 1, 0.09)
+                                                       : camHeaderMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.05)
+                                                       : "transparent"
+                                                border {
+                                                    width: camHeaderMouse.containsMouse ? 1 : 0
+                                                    color: Theme.borderDefault
+                                                }
+                                                Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                                            }
+
                                             RowLayout {
                                                 anchors.fill: parent
                                                 spacing: Theme.spacingMD
@@ -483,7 +526,9 @@ Rectangle {
                                             }
 
                                             MouseArea {
+                                                id: camHeaderMouse
                                                 anchors.fill: parent
+                                                hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
                                                 onClicked: camCard.camExpanded = !camCard.camExpanded
                                             }

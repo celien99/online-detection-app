@@ -19,6 +19,26 @@ Rectangle {
     anchors.fill: parent
     color: Theme.bgOverlay
     z: 100
+    focus: visible
+
+    onVisibleChanged: {
+        if (visible) {
+            forceActiveFocus()
+        }
+    }
+
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_1) {
+            overlay.confirmNG()
+            event.accepted = true
+        } else if (event.key === Qt.Key_2) {
+            overlay.markReview()
+            event.accepted = true
+        } else if (event.key === Qt.Key_3) {
+            overlay.dismissFalseAlarm()
+            event.accepted = true
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -59,7 +79,7 @@ Rectangle {
                 Text {
                     id: countdownLabel
                     anchors.centerIn: parent
-                    text: qsTr("自动确认 ") + countdown + "s"
+                    text: countdown <= 0 ? qsTr("正在自动确认") : qsTr("自动确认 ") + countdown + "s"
                     color: countdown <= 5 ? Theme.statusNG : Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     font.bold: true
@@ -98,12 +118,24 @@ Rectangle {
                         }
                     }
                     Image {
+                        id: originalImage
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         Layout.margins: 4
+                        visible: cameraId !== "" && status !== Image.Error
                         source: "image://camera/" + cameraId + "_original?v=" + imageVersion
                         fillMode: Image.PreserveAspectFit
                         cache: false
+                    }
+                    EmptyState {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.margins: 4
+                        visible: originalImage.status === Image.Error || cameraId === ""
+                        title: qsTr("原图不可用")
+                        message: qsTr("未收到该相机的告警原图。")
+                        badgeText: qsTr("IMAGE")
+                        accentColor: Theme.statusWarning
                     }
                 }
             }
@@ -133,12 +165,24 @@ Rectangle {
                         }
                     }
                     Image {
+                        id: overlayImage
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         Layout.margins: 4
+                        visible: cameraId !== "" && status !== Image.Error
                         source: "image://camera/" + cameraId + "_overlay?v=" + imageVersion
                         fillMode: Image.PreserveAspectFit
                         cache: false
+                    }
+                    EmptyState {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.margins: 4
+                        visible: overlayImage.status === Image.Error || cameraId === ""
+                        title: qsTr("检测图不可用")
+                        message: qsTr("可先按当前缺陷信息处理，随后在日志中复核该记录。")
+                        badgeText: qsTr("OVERLAY")
+                        accentColor: Theme.statusWarning
                     }
                 }
             }
@@ -182,7 +226,7 @@ Rectangle {
             spacing: Theme.spacingLG
 
             ActionButton {
-                buttonText: qsTr("确认缺陷")
+                buttonText: qsTr("1  确认缺陷")
                 bgColor: Theme.statusNG
                 Layout.fillWidth: true
                 implicitHeight: Theme.touchComfort
@@ -190,7 +234,7 @@ Rectangle {
                 onClicked: overlay.confirmNG()
             }
             ActionButton {
-                buttonText: qsTr("标记待复核")
+                buttonText: qsTr("2  标记待复核")
                 bgColor: Theme.statusWarning
                 textColor: "#000000"
                 Layout.fillWidth: true
@@ -199,7 +243,7 @@ Rectangle {
                 onClicked: overlay.markReview()
             }
             ActionButton {
-                buttonText: qsTr("误报忽略")
+                buttonText: qsTr("3  误报忽略")
                 bgColor: Theme.bgTertiary
                 Layout.fillWidth: true
                 implicitHeight: Theme.touchComfort

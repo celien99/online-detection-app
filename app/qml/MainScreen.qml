@@ -9,6 +9,25 @@ Rectangle {
     color: Theme.bgPrimary
 
     property var viewModel: null
+    property string previewCameraId: ""
+    property int previewFrameVersion: 0
+
+    function openCameraPreview(cameraId) {
+        previewCameraId = cameraId
+        previewFrameVersion = frameVersionForCamera(cameraId)
+        previewOverlay.visible = true
+        previewOverlay.forceActiveFocus()
+    }
+
+    Connections {
+        target: mainScreen.viewModel
+        ignoreUnknownSignals: true
+        function onCameraListChanged() {
+            if (previewOverlay.visible) {
+                mainScreen.previewFrameVersion = mainScreen.frameVersionForCamera(mainScreen.previewCameraId)
+            }
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -49,14 +68,24 @@ Rectangle {
 
                 Text {
                     text: viewModel ? qsTr("已连接 ") + connectedCameraCount(viewModel.cameraList) + "/" + viewModel.cameraList.length : qsTr("已连接 0/0")
-                    color: Theme.textSecondary
+                    color: {
+                        if (!viewModel || viewModel.cameraList.length === 0) return Theme.textMuted
+                        return connectedCameraCount(viewModel.cameraList) === viewModel.cameraList.length ? Theme.statusOK : Theme.statusWarning
+                    }
                     font.pixelSize: Theme.fontSizeSM
                 }
 
                 Item { Layout.fillWidth: true }
 
+                StatusBadge {
+                    visible: viewModel && viewModel.triggerError !== ""
+                    badgeText: qsTr("触发异常")
+                    badgeStatus: "ng"
+                    maxBadgeWidth: 100
+                }
+
                 ActionButton {
-                    buttonText: qsTr("手动触发")
+                    buttonText: viewModel && viewModel.lineBusy ? qsTr("检测中") : qsTr("手动触发")
                     bgColor: Theme.accent
                     implicitHeight: 32
                     Layout.preferredWidth: 104
@@ -70,6 +99,90 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             cameraModel: viewModel ? viewModel.cameraList : []
+            onOpenPreview: function(cameraId) {
+                mainScreen.openCameraPreview(cameraId)
+            }
+        }
+    }
+
+    Rectangle {
+        id: previewOverlay
+        anchors.fill: parent
+        visible: false
+        focus: visible
+        color: Theme.bgOverlay
+        z: 90
+
+        Keys.onEscapePressed: previewOverlay.visible = false
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: previewOverlay.visible = false
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - Theme.spacingXL * 2, 1280)
+            height: Math.min(parent.height - Theme.spacingXL * 2, 820)
+            radius: Theme.radiusMD
+            color: Theme.bgCard
+            border { width: 1; color: Theme.borderStrong }
+            clip: true
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: function(mouse) { mouse.accepted = true }
+            }
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 44
+                    color: Theme.bgTertiary
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.spacingMD
+                        anchors.rightMargin: Theme.spacingSM
+                        spacing: Theme.spacingSM
+
+                        Text {
+                            text: mainScreen.previewCameraId
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeSM
+                            font.bold: true
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+
+                        StatusBadge {
+                            badgeText: qsTr("实时预览")
+                            badgeStatus: "ok"
+                            maxBadgeWidth: 96
+                        }
+
+                        ActionButton {
+                            buttonText: qsTr("关闭")
+                            bgColor: Theme.bgTertiary
+                            implicitHeight: 30
+                            Layout.preferredWidth: 72
+                            onClicked: previewOverlay.visible = false
+                        }
+                    }
+                }
+
+                Image {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.margins: Theme.spacingSM
+                    source: "image://camera/" + mainScreen.previewCameraId + "?v=" + mainScreen.previewFrameVersion
+                    cache: false
+                    fillMode: Image.PreserveAspectFit
+                }
+            }
         }
     }
 
@@ -89,7 +202,7 @@ Rectangle {
     }
 
     Timer {
-        interval: 500
+        interval: 1000
         running: true
         repeat: true
         onTriggered: {
@@ -107,5 +220,16 @@ Rectangle {
             }
         }
         return count
+    }
+
+    function frameVersionForCamera(cameraId) {
+        if (!viewModel) return 0
+        var items = viewModel.cameraList
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].cameraId === cameraId) {
+                return items[i].frameVersion || 0
+            }
+        }
+        return 0
     }
 }

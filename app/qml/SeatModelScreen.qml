@@ -20,6 +20,7 @@ Rectangle {
 
     Connections {
         target: seatModelScreen.viewModel
+        ignoreUnknownSignals: true
         function onToast(message, level) { toast.show(message, level); }
         function onRequestConfirmSwitch(modelId) { confirmDialog.modelId = modelId; confirmDialog.open(); }
     }
@@ -70,127 +71,118 @@ Rectangle {
                 font.bold: true
             }
             Item { Layout.fillWidth: true }
-            Rectangle {
-                radius: Theme.radiusSM
-                color: Theme.accentGreenDim
-                implicitWidth: addBtnText.implicitWidth + 24
+            ActionButton {
+                buttonText: qsTr("新增型号")
+                bgColor: Theme.accentGreen
+                textColor: "#000000"
+                Layout.preferredWidth: 112
                 implicitHeight: 36
-                Text {
-                    id: addBtnText
-                    anchors.centerIn: parent
-                    text: qsTr("+ 新增型号")
-                    color: Theme.accentGreen
-                    font.pixelSize: Theme.fontSizeSM
-                    font.bold: true
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: addDialog.prepareAndOpen()
-                }
+                onClicked: addDialog.prepareAndOpen()
             }
         }
 
-        ListView {
-            id: modelList
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            model: seatModelScreen.viewModel ? seatModelScreen.viewModel.seatModels : []
-            spacing: Theme.spacingSM
 
-            delegate: Rectangle {
-                width: ListView.view.width
-                implicitHeight: 80
-                color: Theme.cardGlass
-                radius: Theme.radiusMD
-                border { width: 1; color: modelData.is_default ? Theme.accentGreen : Theme.cardGlassBorder }
+            ListView {
+                id: modelList
+                anchors.fill: parent
+                model: seatModelScreen.viewModel ? seatModelScreen.viewModel.seatModels : []
+                spacing: Theme.spacingSM
+                visible: count > 0
+                clip: true
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMD
-                    spacing: Theme.spacingMD
-
-                    Rectangle {
-                        width: 10; height: 10; radius: 5
-                        color: modelData.is_default ? Theme.accentGreen : Theme.textMuted
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
-                        Text {
-                            text: modelData.display_name || modelData.id
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeSM
-                            font.bold: true
-                        }
-                        Text {
-                            text: modelData.description || ""
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeXS
-                            visible: text !== ""
-                        }
-                        Text {
-                            text: qsTr("关联相机: ") + (modelData.camera_ids ? modelData.camera_ids.join(", ") : qsTr("无"))
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                    }
+                delegate: Rectangle {
+                    width: ListView.view.width
+                    implicitHeight: 80
+                    color: Theme.cardGlass
+                    radius: Theme.radiusMD
+                    border { width: 1; color: modelData.is_default ? Theme.accentGreen : Theme.cardGlassBorder }
 
                     RowLayout {
-                        spacing: Theme.spacingXS
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacingMD
+                        spacing: Theme.spacingMD
+
                         Rectangle {
-                            radius: Theme.radiusSM
-                            color: Theme.bgTertiary
-                            implicitWidth: 48; implicitHeight: 28
+                            width: 10; height: 10; radius: 5
+                            color: modelData.is_default ? Theme.accentGreen : Theme.textMuted
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
                             Text {
-                                anchors.centerIn: parent
-                                text: qsTr("编辑")
+                                text: modelData.display_name || modelData.id
+                                color: Theme.textPrimary
+                                font.pixelSize: Theme.fontSizeSM
+                                font.bold: true
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                text: modelData.description || ""
                                 color: Theme.textSecondary
                                 font.pixelSize: Theme.fontSizeXS
+                                visible: text !== ""
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
                             }
-                            MouseArea {
-                                anchors.fill: parent
+                            Text {
+                                text: qsTr("关联相机: ") + (modelData.camera_ids ? modelData.camera_ids.join(", ") : qsTr("无"))
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fontSizeXS
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: Theme.spacingXS
+                            ActionButton {
+                                buttonText: qsTr("编辑")
+                                bgColor: Theme.bgTertiary
+                                implicitHeight: 28
+                                implicitWidth: 52
+                                font.pixelSize: Theme.fontSizeXS
                                 onClicked: editDialog.prepareAndOpen(
                                     modelData.id,
                                     modelData.display_name || "",
                                     modelData.description || ""
                                 )
                             }
-                        }
-                        Rectangle {
-                            radius: Theme.radiusSM
-                            color: modelData.is_default ? Theme.bgTertiary : Theme.accentGreenDim
-                            implicitWidth: modelData.is_default ? 48 : 72
-                            implicitHeight: 28
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.is_default ? qsTr("默认") : qsTr("设为默认")
-                                color: modelData.is_default ? Theme.textMuted : Theme.accentGreen
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
+                            ActionButton {
+                                buttonText: modelData.is_default ? qsTr("默认") : qsTr("设为默认")
+                                bgColor: modelData.is_default ? Theme.bgTertiary : Theme.accentGreen
+                                textColor: modelData.is_default ? Theme.textMuted : "#000000"
+                                implicitHeight: 28
+                                implicitWidth: modelData.is_default ? 52 : 76
                                 enabled: !modelData.is_default
+                                font.pixelSize: Theme.fontSizeXS
                                 onClicked: seatModelScreen.viewModel.setActive(modelData.id)
                             }
-                        }
-                        Rectangle {
-                            radius: Theme.radiusSM
-                            color: Qt.rgba(0.973, 0.318, 0.286, 0.1)
-                            implicitWidth: 40; implicitHeight: 28
-                            Text {
-                                anchors.centerIn: parent
-                                text: qsTr("删除")
-                                color: Theme.statusNG
+                            ActionButton {
+                                buttonText: qsTr("删除")
+                                bgColor: Qt.rgba(0.973, 0.318, 0.286, 0.16)
+                                textColor: Theme.statusNG
+                                implicitHeight: 28
+                                implicitWidth: 52
                                 font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
                                 onClicked: seatModelScreen.viewModel.deleteModel(modelData.id)
                             }
                         }
                     }
                 }
+            }
+
+            EmptyState {
+                anchors.fill: parent
+                visible: modelList.count === 0
+                title: qsTr("暂无座椅型号")
+                message: qsTr("创建型号后，可以为不同座椅配置独立相机和检测模型。")
+                badgeText: qsTr("MODEL")
+                accentColor: Theme.accentGreen
             }
         }
     }

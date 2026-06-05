@@ -5,10 +5,12 @@ Rectangle {
     id: badge
     property string badgeText: "OK"
     property string badgeStatus: "ok"
+    property int maxBadgeWidth: 120
 
-    width: label.implicitWidth + 14
+    width: Math.min(label.implicitWidth + 14, maxBadgeWidth)
     height: 24
     radius: Theme.radiusSM
+    clip: true
     color: {
         switch (badgeStatus) {
             case "ok": return Theme.statusOKDim;
@@ -33,8 +35,12 @@ Rectangle {
         id: label
         anchors.centerIn: parent
         text: badgeText
+        width: parent.width - 10
         font.pixelSize: Theme.fontSizeXS
         font.bold: true
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
+        elide: Text.ElideRight
         color: {
             switch (badgeStatus) {
                 case "ok": return Theme.statusOK;
