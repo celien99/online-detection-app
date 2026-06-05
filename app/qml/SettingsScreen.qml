@@ -457,19 +457,23 @@ Rectangle {
                                 delegate: Rectangle {
                                     id: camCard
                                     Layout.fillWidth: true
-                                    height: camCard.camExpanded ? camExpandedH : camCollapsedH
-                                    Behavior on height { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                                    implicitHeight: camCard.camExpanded
+                                                    ? (camContent.implicitHeight + Theme.spacingMD * 2)
+                                                    : camCollapsedH
+                                    Behavior on implicitHeight { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                                     clip: true
                                     color: Theme.cardGlass
                                     radius: Theme.radiusMD
                                     border { width: 1; color: Theme.cardGlassBorder }
 
                                     readonly property int camCollapsedH: 56
-                                    readonly property int camExpandedH: 300
                                     property bool camExpanded: false
 
                                     ColumnLayout {
-                                        anchors.fill: parent
+                                        id: camContent
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.top: parent.top
                                         anchors.margins: Theme.spacingMD
                                         spacing: Theme.spacingSM
 
