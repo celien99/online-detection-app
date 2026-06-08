@@ -46,7 +46,7 @@ Rectangle {
             lineConnected: viewModel ? viewModel.lineConnected : false
             lineBusy: viewModel ? viewModel.lineBusy : false
             lastTriggerResult: viewModel ? viewModel.lastTriggerResult : ""
-            triggerError: viewModel ? viewModel.triggerError : ""
+            triggerError: viewModel ? viewModel.triggerErrorDisplay : ""
         }
 
         Rectangle {
@@ -79,7 +79,7 @@ Rectangle {
                 Item { Layout.fillWidth: true }
 
                 StatusBadge {
-                    visible: viewModel && viewModel.triggerError !== ""
+                    visible: viewModel && viewModel.triggerErrorDisplay !== ""
                     badgeText: qsTr("触发异常")
                     badgeStatus: "ng"
                     maxBadgeWidth: 100
@@ -123,10 +123,10 @@ Rectangle {
 
                 ActionButton {
                     buttonText: viewModel && viewModel.lineBusy ? qsTr("检测中") : qsTr("手动触发")
-                    bgColor: Theme.accent
+                    bgColor: viewModel && viewModel.triggerEnabled ? Theme.accent : Theme.bgTertiary
                     implicitHeight: 32
                     Layout.preferredWidth: 104
-                    enabled: viewModel && !viewModel.lineBusy
+                    enabled: viewModel && viewModel.triggerEnabled && !viewModel.lineBusy
                     onClicked: viewModel.manualTrigger()
                 }
             }
