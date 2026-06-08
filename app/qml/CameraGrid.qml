@@ -8,6 +8,7 @@ Item {
 
     property var cameraModel: []
     property string gridLayout: "2x2"
+    property string displayMode: "auto"
     signal openPreview(string cameraId)
 
     GridLayout {
@@ -35,6 +36,7 @@ Item {
                 defectLabel: modelData.defectLabel || ""
                 live: modelData.live || false
                 frameVersion: modelData.frameVersion || 0
+                displayMode: grid.displayMode
                 onOpenPreview: function(cameraId) {
                     grid.openPreview(cameraId)
                 }

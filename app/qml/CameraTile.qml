@@ -10,6 +10,7 @@ Rectangle {
     property string defectLabel: ""
     property bool live: false
     property int frameVersion: 0
+    property string displayMode: "auto"
 
     signal openPreview(string cameraId)
 
@@ -26,7 +27,7 @@ Rectangle {
         id: cameraImage
         anchors.fill: parent
         anchors.margins: 4
-        source: "image://camera/" + cameraId + "?v=" + frameVersion
+        source: "image://camera/" + cameraId + imageSuffix() + "?v=" + frameVersion
         cache: false
         fillMode: Image.PreserveAspectFit
     }
@@ -106,6 +107,15 @@ Rectangle {
                 badgeStatus: cameraStatus === "ng" ? "ng" : "warning"
                 maxBadgeWidth: 82
             }
+
+            StatusBadge {
+                visible: imageSuffix() !== ""
+                Layout.alignment: Qt.AlignVCenter
+                height: 20
+                badgeText: imageSuffix() === "_heatmap" ? qsTr("热力") : qsTr("检测")
+                badgeStatus: imageSuffix() === "_heatmap" ? "warning" : "ok"
+                maxBadgeWidth: 64
+            }
         }
     }
 
@@ -164,5 +174,12 @@ Rectangle {
         if (status === "ng") return dim ? Theme.statusNGDim : Theme.statusNG
         if (status === "warn") return dim ? Theme.statusWarningDim : Theme.statusWarning
         return hoverArea.containsMouse ? Theme.borderStrong : Theme.borderDefault
+    }
+
+    function imageSuffix() {
+        if (displayMode === "overlay") return "_overlay"
+        if (displayMode === "heatmap") return "_heatmap"
+        if (displayMode === "auto" && cameraStatus === "ng") return "_overlay"
+        return ""
     }
 }

@@ -11,6 +11,7 @@ Rectangle {
     property var viewModel: null
     property string previewCameraId: ""
     property int previewFrameVersion: 0
+    property string displayMode: "auto"
 
     function openCameraPreview(cameraId) {
         previewCameraId = cameraId
@@ -84,6 +85,42 @@ Rectangle {
                     maxBadgeWidth: 100
                 }
 
+                RowLayout {
+                    spacing: 4
+
+                    ActionButton {
+                        buttonText: qsTr("自动")
+                        bgColor: mainScreen.displayMode === "auto" ? Theme.accent : Theme.bgTertiary
+                        implicitHeight: 30
+                        Layout.preferredWidth: 56
+                        onClicked: mainScreen.displayMode = "auto"
+                    }
+
+                    ActionButton {
+                        buttonText: qsTr("原图")
+                        bgColor: mainScreen.displayMode === "original" ? Theme.accent : Theme.bgTertiary
+                        implicitHeight: 30
+                        Layout.preferredWidth: 56
+                        onClicked: mainScreen.displayMode = "original"
+                    }
+
+                    ActionButton {
+                        buttonText: qsTr("检测图")
+                        bgColor: mainScreen.displayMode === "overlay" ? Theme.accent : Theme.bgTertiary
+                        implicitHeight: 30
+                        Layout.preferredWidth: 68
+                        onClicked: mainScreen.displayMode = "overlay"
+                    }
+
+                    ActionButton {
+                        buttonText: qsTr("热力图")
+                        bgColor: mainScreen.displayMode === "heatmap" ? Theme.accent : Theme.bgTertiary
+                        implicitHeight: 30
+                        Layout.preferredWidth: 68
+                        onClicked: mainScreen.displayMode = "heatmap"
+                    }
+                }
+
                 ActionButton {
                     buttonText: viewModel && viewModel.lineBusy ? qsTr("检测中") : qsTr("手动触发")
                     bgColor: Theme.accent
@@ -99,6 +136,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             cameraModel: viewModel ? viewModel.cameraList : []
+            displayMode: mainScreen.displayMode
             onOpenPreview: function(cameraId) {
                 mainScreen.openCameraPreview(cameraId)
             }
@@ -178,7 +216,7 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.margins: Theme.spacingSM
-                    source: "image://camera/" + mainScreen.previewCameraId + "?v=" + mainScreen.previewFrameVersion
+                    source: "image://camera/" + mainScreen.previewCameraId + previewImageSuffix() + "?v=" + mainScreen.previewFrameVersion
                     cache: false
                     fillMode: Image.PreserveAspectFit
                 }
@@ -231,5 +269,19 @@ Rectangle {
             }
         }
         return 0
+    }
+
+    function previewImageSuffix() {
+        if (displayMode === "overlay") return "_overlay"
+        if (displayMode === "heatmap") return "_heatmap"
+        if (displayMode !== "auto") return ""
+        if (!viewModel) return ""
+        var items = viewModel.cameraList
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].cameraId === previewCameraId && items[i].status === "ng") {
+                return "_overlay"
+            }
+        }
+        return ""
     }
 }

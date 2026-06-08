@@ -23,3 +23,15 @@ def test_image_provider_serves_original_and_overlay_images() -> None:
     assert original_image.height() == 2
     assert overlay_image.width() == 5
     assert overlay_image.height() == 4
+
+
+def test_image_provider_heatmap_without_data_falls_back_to_original() -> None:
+    provider = CameraImageProvider()
+    original = np.zeros((2, 3, 3), dtype=np.uint8)
+
+    provider.update_frame("CAM_A", original)
+
+    heatmap_image = provider.requestImage("CAM_A_heatmap", None, None)
+
+    assert heatmap_image.width() == 3
+    assert heatmap_image.height() == 2

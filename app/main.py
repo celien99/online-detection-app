@@ -500,6 +500,7 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
         hot_reload.stop()
         if trigger_service is not None:
             trigger_service.stop()
+        camera_manager.shutdown()
         camera_manager.disconnect_all()
         line_signal.disconnect()
         plc.disconnect()

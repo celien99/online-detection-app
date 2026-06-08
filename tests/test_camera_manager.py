@@ -1,8 +1,10 @@
 """Tests for CameraManager."""
 from __future__ import annotations
 
+import threading
+import time
+
 import numpy as np
-import pytest
 
 from app.infrastructure.camera.interface import CameraInterface, CameraStatus
 from app.infrastructure.camera.manager import CameraManager
@@ -53,6 +55,29 @@ class FakeCamera(CameraInterface):
         )
 
 
+class OverlapCamera(FakeCamera):
+    def __init__(self, camera_id: str, condition: threading.Condition, state: dict[str, int]) -> None:
+        super().__init__(camera_id)
+        self._condition = condition
+        self._state = state
+
+    def grab_frame(self, timeout_ms: int = 1000) -> np.ndarray | None:
+        if not self.is_connected:
+            return None
+        with self._condition:
+            self._state["active"] += 1
+            self._state["max_active"] = max(self._state["max_active"], self._state["active"])
+            self._condition.notify_all()
+            deadline = time.monotonic() + 0.25
+            while self._state["active"] < 2 and time.monotonic() < deadline:
+                self._condition.wait(timeout=0.01)
+        time.sleep(0.02)
+        with self._condition:
+            self._state["active"] -= 1
+            self._condition.notify_all()
+        return super().grab_frame(timeout_ms=timeout_ms)
+
+
 class TestCameraManager:
     def test_register_and_connect(self) -> None:
         mgr = CameraManager()
@@ -70,6 +95,24 @@ class TestCameraManager:
         assert "CAM_A" in frames
         assert frames["CAM_A"] is not None
         assert frames["CAM_A"].shape == (1080, 1920, 3)
+
+    def test_grab_all_collects_connected_cameras_in_parallel(self) -> None:
+        mgr = CameraManager()
+        condition = threading.Condition()
+        state = {"active": 0, "max_active": 0}
+        cams = [
+            OverlapCamera("CAM_A", condition, state),
+            OverlapCamera("CAM_B", condition, state),
+        ]
+        for cam in cams:
+            mgr.register(cam)
+        mgr.connect_all()
+
+        frames = mgr.grab_all()
+
+        assert set(frames) == {"CAM_A", "CAM_B"}
+        assert all(frame is not None for frame in frames.values())
+        assert state["max_active"] >= 2
 
     def test_grab_all_returns_none_when_disconnected(self) -> None:
         mgr = CameraManager()

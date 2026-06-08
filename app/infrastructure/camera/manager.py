@@ -1,6 +1,7 @@
 """Camera manager: lifecycle, health checks, auto-reconnect."""
 from __future__ import annotations
 
+import concurrent.futures
 import threading
 import time
 from typing import Any, Dict
@@ -20,6 +21,8 @@ class CameraManager:
         self._last_heartbeat: Dict[str, float] = {}
         self._watchdog_interval = 5.0
         self._max_heartbeat_gap = 15.0
+        self._grab_executor: concurrent.futures.ThreadPoolExecutor | None = None
+        self._grab_executor_workers = 0
 
     def register(self, camera: CameraInterface) -> None:
         with self._lock:
@@ -66,20 +69,48 @@ class CameraManager:
 
     def grab_all(self, timeout_ms: int = 1000) -> Dict[str, Any]:
         """从所有已连接相机采集一帧。返回 {camera_id: np.ndarray | None}。"""
-        frames: Dict[str, Any] = {}
         with self._lock:
             cameras = list(self._cameras.values())
-        for camera in cameras:
-            if not camera.is_connected:
-                frames[camera.camera_id] = None
-                continue
-            try:
-                frame = camera.grab_frame(timeout_ms=timeout_ms)
-                frames[camera.camera_id] = frame
-                self._last_heartbeat[camera.camera_id] = time.time()
-            except Exception:
-                frames[camera.camera_id] = None
+        if not cameras:
+            return {}
+
+        with self._lock:
+            executor = self._ensure_grab_executor(len(cameras))
+            futures = {
+                executor.submit(self._grab_one, camera, timeout_ms): camera.camera_id
+                for camera in cameras
+            }
+        frames: Dict[str, Any] = {}
+        for future, camera_id in futures.items():
+            frame = future.result()
+            frames[camera_id] = frame
+            if frame is not None:
+                with self._lock:
+                    self._last_heartbeat[camera_id] = time.time()
         return frames
+
+    def _grab_one(self, camera: CameraInterface, timeout_ms: int) -> Any:
+        if not camera.is_connected:
+            return None
+        try:
+            return camera.grab_frame(timeout_ms=timeout_ms)
+        except Exception:
+            return None
+
+    def _ensure_grab_executor(self, camera_count: int) -> concurrent.futures.ThreadPoolExecutor:
+        worker_count = max(1, camera_count)
+        with self._lock:
+            if self._grab_executor is not None and self._grab_executor_workers >= worker_count:
+                return self._grab_executor
+            old_executor = self._grab_executor
+            self._grab_executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=worker_count,
+                thread_name_prefix="camera-grab",
+            )
+            self._grab_executor_workers = worker_count
+        if old_executor is not None:
+            old_executor.shutdown(wait=False)
+        return self._grab_executor
 
     def start_watchdog(self) -> None:
         self._running = True
@@ -95,6 +126,15 @@ class CameraManager:
 
     def stop_watchdog(self) -> None:
         self._running = False
+
+    def shutdown(self) -> None:
+        self.stop_watchdog()
+        with self._lock:
+            executor = self._grab_executor
+            self._grab_executor = None
+            self._grab_executor_workers = 0
+        if executor is not None:
+            executor.shutdown(wait=False)
 
     def _watchdog_loop(self, camera_id: str) -> None:
         while self._running:
