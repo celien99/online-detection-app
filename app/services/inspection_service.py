@@ -46,6 +46,13 @@ class InspectionService:
             self._inspector = None
             self._warmed_up = False
 
+    def reload_runtime_config(self) -> None:
+        """Drop cached runtime objects so the next inspection uses ConfigStore data."""
+        with self._state_lock:
+            self._active_camera_configs = None
+            self._inspector = None
+            self._warmed_up = False
+
     def set_active_camera_configs(
         self,
         cameras: list[dict[str, Any]],

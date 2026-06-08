@@ -136,6 +136,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             cameraModel: viewModel ? viewModel.cameraList : []
+            gridLayout: viewModel ? viewModel.gridLayout : "2x2"
             displayMode: mainScreen.displayMode
             onOpenPreview: function(cameraId) {
                 mainScreen.openCameraPreview(cameraId)

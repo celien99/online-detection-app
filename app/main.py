@@ -10,9 +10,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
-import cv2
-import numpy as np
-from PySide6.QtCore import QUrl, Qt, QTimer
+from PySide6.QtCore import QUrl, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -41,6 +39,10 @@ from app.services.config_persistence import ConfigPersistenceService
 from app.services.seat_model_service import SeatModelService
 from app.services.model_file_service import ModelFileService
 from app.services.platform_sync_service import PlatformSyncService
+from app.services.runtime_config_apply import (
+    RuntimeConfigApplyResult,
+    classify_runtime_config_changes,
+)
 from app.viewmodels.seat_model_viewmodel import SeatModelViewModel
 from app.viewmodels.model_deploy_viewmodel import ModelDeployViewModel
 from app.runtime_paths import chdir_to_config_dir, resolve_config_path
@@ -82,6 +84,31 @@ def _iter_patchcore_model_paths(cameras: list[dict[str, Any]]) -> list[str]:
             region_path = region.get("patchcore_model_path", "")
             if region_path:
                 paths.append(str(region_path))
+    return paths
+
+
+def _create_runtime_cameras(config: ConfigStore) -> tuple[list[CameraInterface], list[str]]:
+    cameras: list[CameraInterface] = []
+    camera_ids: list[str] = []
+    logger = get_runtime_logger()
+    for cam_config in config.get_camera_configs():
+        try:
+            camera = create_camera(cam_config)
+            cameras.append(camera)
+            camera_ids.append(camera.camera_id)
+        except Exception as exc:
+            logger.exception("Failed to create camera %s", cam_config.get("camera_id", "?"))
+            print(f"Failed to create camera {cam_config.get('camera_id', '?')}: {exc}", file=sys.stderr)
+    return cameras, camera_ids
+
+
+def _iter_hot_reload_paths(cameras: list[dict[str, Any]]) -> list[str]:
+    paths: list[str] = []
+    for cam in cameras:
+        fc = cam.get("filter_classifier", {})
+        if fc.get("enabled") and fc.get("model_path"):
+            paths.append(str(fc["model_path"]))
+    paths.extend(_iter_patchcore_model_paths(cameras))
     return paths
 
 
@@ -225,25 +252,15 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
 
     # ── Hot reload ──
     if offline_config.get("hot_reload_enabled", False):
-        for cam in config.get_camera_configs():
-            fc = cam.get("filter_classifier", {})
-            if fc.get("enabled") and fc.get("model_path"):
-                hot_reload.watch(fc["model_path"])
-        for patchcore_path in _iter_patchcore_model_paths(config.get_camera_configs()):
-            hot_reload.watch(patchcore_path)
+        for path in _iter_hot_reload_paths(config.get_camera_configs()):
+            hot_reload.watch(path)
         hot_reload.on_change(lambda: setattr(inspection_service, '_inspector', None))
         hot_reload.start()
 
     # ── Connect cameras ──
-    camera_ids = []
-    for cam_config in config.get_camera_configs():
-        try:
-            camera = create_camera(cam_config)
-            camera_manager.register(camera)
-            camera_ids.append(camera.camera_id)
-        except Exception as exc:
-            logger.exception("Failed to create camera %s", cam_config.get("camera_id", "?"))
-            print(f"Failed to create camera {cam_config.get('camera_id', '?')}: {exc}", file=sys.stderr)
+    cameras, camera_ids = _create_runtime_cameras(config)
+    for camera in cameras:
+        camera_manager.register(camera)
 
     camera_manager.connect_all()
 
@@ -260,6 +277,15 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
         pass
 
     # ── Start camera watchdog ──
+    runtime_lock = threading.RLock()
+    runtime_state: dict[str, Any] = {
+        "plc": plc,
+        "line_signal": line_signal,
+        "inspection_service": inspection_service,
+        "alert_manager": alert_manager,
+        "send_legacy_plc_defect": send_legacy_plc_defect,
+    }
+
     camera_manager.start_watchdog()
 
     # ── QML Application ──
@@ -294,6 +320,108 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     review_vm = ReviewViewModel(log_engine)
     diagnostics_vm = DiagnosticsViewModel(config, config_path)
 
+    def _apply_runtime_config(dirty_paths: set[str]) -> RuntimeConfigApplyResult:
+        changes = classify_runtime_config_changes(dirty_paths)
+        result = RuntimeConfigApplyResult(
+            restart_required=sorted(changes.restart_required),
+        )
+
+        app_cfg = config.get_app_config()
+        if changes.ui or changes.cameras:
+            main_vm.apply_runtime_config(
+                line_id=app_cfg.get("line_id", ""),
+                grid_layout=app_cfg.get("grid_layout", "2x2"),
+                camera_ids=[cam.get("camera_id", "") for cam in config.get_camera_configs()],
+            )
+            result.applied.append("ui")
+
+        if changes.cameras:
+            cameras, camera_ids = _create_runtime_cameras(config)
+            camera_manager.replace_all(cameras)
+            main_vm.apply_runtime_config(
+                line_id=app_cfg.get("line_id", ""),
+                grid_layout=app_cfg.get("grid_layout", "2x2"),
+                camera_ids=camera_ids,
+            )
+            result.applied.append("cameras")
+
+        if changes.inspection:
+            current_inspection = runtime_state["inspection_service"]
+            current_inspection.reload_runtime_config()
+            current_inspection.set_active_seat_model(seat_model_service.get_default_model_id())
+            result.applied.append("inspection_service")
+
+        trigger_service_replaced = False
+        if changes.plc:
+            plc_cfg = config.get_plc_config()
+            line_cfg = config.get("line_signal", default={})
+            new_plc = _create_plc(plc_cfg)
+            new_line_signal = create_line_signal(line_cfg, plc_cfg)
+            try:
+                new_plc.connect()
+            except Exception:
+                logger.exception("PLC reconnection failed after runtime config apply")
+            try:
+                new_line_signal.connect()
+            except Exception:
+                logger.exception("Line signal reconnection failed after runtime config apply")
+
+            with runtime_lock:
+                old_plc = runtime_state["plc"]
+                old_line_signal = runtime_state["line_signal"]
+                runtime_state["plc"] = new_plc
+                runtime_state["line_signal"] = new_line_signal
+                runtime_state["send_legacy_plc_defect"] = _should_send_legacy_plc_defect(
+                    runtime_mode,
+                    line_cfg,
+                    plc_cfg,
+                )
+            if runtime_mode == TRIGGERED_MODE:
+                _replace_trigger_service(_create_trigger_service())
+                trigger_service_replaced = True
+            try:
+                old_line_signal.disconnect()
+            except Exception:
+                pass
+            try:
+                old_plc.disconnect()
+            except Exception:
+                pass
+            result.applied.append("plc_line_signal")
+
+        if changes.trigger and runtime_mode == TRIGGERED_MODE and not trigger_service_replaced:
+            _replace_trigger_service(_create_trigger_service())
+            result.applied.append("trigger_timing")
+
+        if changes.alert:
+            alert_cfg = config.get_alert_config()
+            alert_manager.update_config(
+                timeout_seconds=alert_cfg.get("ng_popup_timeout_seconds", 30),
+                default_action=alert_cfg.get("ng_default_action", "confirm_defect"),
+            )
+            result.applied.append("alert")
+
+        if changes.hot_reload:
+            offline_cfg = config.get_offline_platform_config()
+            hot_reload.replace_watch_paths(
+                _iter_hot_reload_paths(config.get_camera_configs()),
+                poll_seconds=offline_cfg.get("hot_reload_poll_seconds", 30),
+                enabled=offline_cfg.get("hot_reload_enabled", False),
+            )
+            result.applied.append("hot_reload")
+
+        if changes.has_runtime_changes:
+            logger.info(
+                "Applied runtime config dirty_paths=%s applied=%s restart_required=%s ignored=%s",
+                sorted(dirty_paths),
+                result.applied,
+                result.restart_required,
+                sorted(changes.ignored),
+            )
+        return result
+
+    settings_vm.set_runtime_apply_callback(_apply_runtime_config)
+
     def _on_seat_model_switch(new_model_id: str) -> None:
         cameras = seat_model_service.get_cameras_as_config_list(new_model_id)
         runtime_cameras = []
@@ -301,22 +429,18 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
             camera = create_camera(cam_cfg)
             runtime_cameras.append(camera)
         camera_manager.replace_all(runtime_cameras)
-        inspection_service.set_active_camera_configs(cameras, seat_model_id=new_model_id)
-        main_vm._camera_list.clear()
-        main_vm._camera_index.clear()
-        for idx, cam_cfg in enumerate(cameras):
-            cid = cam_cfg["camera_id"]
-            entry = {"cameraId": cid, "live": False, "status": "ok", "defectLabel": "", "frameVersion": 0}
-            main_vm._camera_list.append(entry)
-            main_vm._camera_index[cid] = entry
-        main_vm.cameraListChanged.emit()
-        hot_reload._paths.clear()
-        for cam in cameras:
-            fc = cam.get("filter_classifier", {})
-            if fc.get("enabled") and fc.get("model_path"):
-                hot_reload.watch(fc["model_path"])
-        for patchcore_path in _iter_patchcore_model_paths(cameras):
-            hot_reload.watch(patchcore_path)
+        runtime_state["inspection_service"].set_active_camera_configs(cameras, seat_model_id=new_model_id)
+        main_vm.apply_runtime_config(
+            line_id=config.get_app_config().get("line_id", ""),
+            grid_layout=config.get_app_config().get("grid_layout", "2x2"),
+            camera_ids=[cam_cfg["camera_id"] for cam_cfg in cameras],
+        )
+        offline_cfg = config.get_offline_platform_config()
+        hot_reload.replace_watch_paths(
+            _iter_hot_reload_paths(cameras),
+            poll_seconds=offline_cfg.get("hot_reload_poll_seconds", 30),
+            enabled=offline_cfg.get("hot_reload_enabled", False),
+        )
 
     seat_model_vm = SeatModelViewModel(seat_model_service, on_switch=_on_seat_model_switch)
     model_deploy_vm = ModelDeployViewModel(model_file_service, platform_sync)
@@ -379,6 +503,34 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     running = True
     trigger_service: TriggerService | None = None
 
+    def _replace_trigger_service(new_service: TriggerService | None) -> None:
+        nonlocal trigger_service
+        if trigger_service is not None:
+            trigger_service.stop()
+        trigger_service = new_service
+        if new_service is None:
+            main_vm.clear_trigger_service()
+            return
+        main_vm.set_trigger_service(new_service)
+        new_service.start()
+
+    def _create_trigger_service() -> TriggerService:
+        app_cfg = config.get_app_config()
+        return TriggerService(
+            adapter=runtime_state["line_signal"],
+            camera_manager=camera_manager,
+            inspection_service=runtime_state["inspection_service"],
+            handle_response=lambda output, frames: _handle_inspection_response(
+                output,
+                frames,
+                publish_frames=False,
+            ),
+            handle_frames=_publish_live_frames,
+            mode=runtime_mode,
+            poll_interval_s=float(app_cfg.get("trigger_poll_interval_s", 0.05)),
+            capture_timeout_s=float(app_cfg.get("capture_timeout_s", 2.0)),
+        )
+
     def _publish_live_frames(frames: dict) -> None:
         valid_frames = {cid: frame for cid, frame in frames.items() if frame is not None}
         if not valid_frames:
@@ -415,8 +567,11 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                 log_engine.insert(record)
                 if cr.status == "NG":
                     severity = Severity.CRITICAL if getattr(cr, 'severity', '') == 'critical' else Severity.MINOR
-                    if send_legacy_plc_defect:
-                        plc.send_defect_signal(DefectSignal(camera_id=cr.camera_id, severity=severity))
+                    with runtime_lock:
+                        current_plc = runtime_state["plc"]
+                        current_send_legacy = runtime_state["send_legacy_plc_defect"]
+                    if current_send_legacy:
+                        current_plc.send_defect_signal(DefectSignal(camera_id=cr.camera_id, severity=severity))
                     if hasattr(cr, 'texture_result') and cr.texture_result is not None:
                         amap = getattr(cr.texture_result, 'heatmap', None)
                         if amap is not None:
@@ -436,11 +591,12 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                     continue
 
                 _publish_live_frames(valid_frames)
-                future = inspection_service.inspect_async(valid_frames)
+                current_inspection = runtime_state["inspection_service"]
+                future = current_inspection.inspect_async(valid_frames)
                 output = future.result(timeout=5.0)
                 _handle_inspection_response(output, valid_frames, publish_frames=False)
 
-            except Exception as exc:
+            except Exception:
                 logger.exception("Inspection loop failed; marking frames as REJECT")
                 # Fail-safe: treat inference failure as potential defect so no
                 # real defect escapes detection due to a pipeline error.
@@ -453,28 +609,16 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                     )
                     stats_collector.record(record)
                     log_engine.insert(record)
-                    if send_legacy_plc_defect:
-                        plc.send_defect_signal(DefectSignal(camera_id=cid, severity=Severity.MINOR))
+                    with runtime_lock:
+                        current_plc = runtime_state["plc"]
+                        current_send_legacy = runtime_state["send_legacy_plc_defect"]
+                    if current_send_legacy:
+                        current_plc.send_defect_signal(DefectSignal(camera_id=cid, severity=Severity.MINOR))
                 main_vm.update_stats_from_collector()
                 time.sleep(0.1)
 
     if runtime_mode == TRIGGERED_MODE:
-        trigger_service = TriggerService(
-            adapter=line_signal,
-            camera_manager=camera_manager,
-            inspection_service=inspection_service,
-            handle_response=lambda output, frames: _handle_inspection_response(
-                output,
-                frames,
-                publish_frames=False,
-            ),
-            handle_frames=_publish_live_frames,
-            mode=runtime_mode,
-            poll_interval_s=float(app_config.get("trigger_poll_interval_s", 0.05)),
-            capture_timeout_s=float(app_config.get("capture_timeout_s", 2.0)),
-        )
-        main_vm.set_trigger_service(trigger_service)
-        trigger_service.start()
+        _replace_trigger_service(_create_trigger_service())
         logger.info("Started triggered inspection service")
     else:
         thread = threading.Thread(target=inspection_loop, daemon=True, name="inspection-loop")
@@ -484,7 +628,7 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     # ── Timeout checker timer ──
     timer = QTimer()
     def _on_timer_tick() -> None:
-        alert_manager.check_timeout()
+        runtime_state["alert_manager"].check_timeout()
         main_vm.tick_countdown()
     timer.timeout.connect(_on_timer_tick)
     timer.start(1000)
@@ -502,9 +646,9 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
             trigger_service.stop()
         camera_manager.shutdown()
         camera_manager.disconnect_all()
-        line_signal.disconnect()
-        plc.disconnect()
-        inspection_service.shutdown()
+        runtime_state["line_signal"].disconnect()
+        runtime_state["plc"].disconnect()
+        runtime_state["inspection_service"].shutdown()
         logger.info("Application cleanup finished")
 
     signal.signal(signal.SIGINT, lambda sig, frame: (cleanup(), app.quit()))

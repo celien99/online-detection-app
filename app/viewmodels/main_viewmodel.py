@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from app.services.alert_manager import AlertAction, AlertManager, AlertState
 from app.services.inspection_service import InspectionService
-from app.services.stats_collector import DailyStats, InspectionRecord, StatsCollector
+from app.services.stats_collector import StatsCollector
 
 if TYPE_CHECKING:
     from app.services.log_engine import LogEngine
@@ -50,6 +50,7 @@ class MainViewModel(QObject):
     lineBusyChanged = Signal()
     lastTriggerResultChanged = Signal()
     triggerErrorChanged = Signal()
+    gridLayoutChanged = Signal()
 
     def __init__(
         self,
@@ -124,6 +125,7 @@ class MainViewModel(QObject):
     def _get_line_busy(self) -> bool: return self._line_busy
     def _get_last_trigger_result(self) -> str: return self._last_trigger_result
     def _get_trigger_error(self) -> str: return self._trigger_error
+    def _get_grid_layout(self) -> str: return self._grid_layout
 
     lineId = Property(str, _get_line_id, notify=lineIdChanged)
     systemStatus = Property(str, _get_system_status, notify=systemStatusChanged)
@@ -142,6 +144,7 @@ class MainViewModel(QObject):
     lineBusy = Property(bool, _get_line_busy, notify=lineBusyChanged)
     lastTriggerResult = Property(str, _get_last_trigger_result, notify=lastTriggerResultChanged)
     triggerError = Property(str, _get_trigger_error, notify=triggerErrorChanged)
+    gridLayout = Property(str, _get_grid_layout, notify=gridLayoutChanged)
 
     # ── Slots ──
 
@@ -177,6 +180,45 @@ class MainViewModel(QObject):
         self._system_status = "running"
         self.systemStatusChanged.emit()
         self._sync_trigger_state()
+
+    def clear_trigger_service(self) -> None:
+        self._trigger_service = None
+        self._line_status = "unknown"
+        self._line_connected = False
+        self._line_busy = False
+        self._last_trigger_result = ""
+        self._trigger_error = ""
+        self.lineStatusChanged.emit()
+        self.lineConnectedChanged.emit()
+        self.lineBusyChanged.emit()
+        self.lastTriggerResultChanged.emit()
+        self.triggerErrorChanged.emit()
+
+    def apply_runtime_config(self, *, line_id: str, grid_layout: str, camera_ids: List[str]) -> None:
+        if self._line_id != line_id:
+            self._line_id = line_id
+            self.lineIdChanged.emit()
+        if self._grid_layout != grid_layout:
+            self._grid_layout = grid_layout
+            self.gridLayoutChanged.emit()
+
+        old_by_id = {entry["cameraId"]: entry for entry in self._camera_list}
+        new_list: List[Dict[str, Any]] = []
+        new_index: Dict[str, Dict[str, Any]] = {}
+        for cid in camera_ids:
+            previous = old_by_id.get(cid, {})
+            entry = {
+                "cameraId": cid,
+                "live": bool(previous.get("live", False)),
+                "status": str(previous.get("status", "ok")),
+                "defectLabel": str(previous.get("defectLabel", "")),
+                "frameVersion": int(previous.get("frameVersion", 0)),
+            }
+            new_list.append(entry)
+            new_index[cid] = entry
+        self._camera_list = new_list
+        self._camera_index = new_index
+        self.cameraListChanged.emit()
 
     # ── Internal ──
 

@@ -57,6 +57,15 @@ Rectangle {
         function onSaveFailed(error) {
             toastNotification.show(qsTr("保存失败: ") + error, "error");
         }
+        function onRuntimeApplied(message) {
+            toastNotification.show(message, "success");
+        }
+        function onRuntimeApplyFailed(error) {
+            toastNotification.show(qsTr("运行时应用失败: ") + error, "error");
+        }
+        function onRestartRequired(message) {
+            toastNotification.show(message, "warning");
+        }
         function onImportSucceeded() {
             toastNotification.show(qsTr("配置导入成功"), "success");
         }
