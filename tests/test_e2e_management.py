@@ -72,7 +72,7 @@ def test_model_file_lifecycle():
 
         src2 = Path(tmp) / "test_model_v2.pt"
         src2.write_bytes(b"model weights v2")
-        mf2 = mfs.import_file("cam1", "patchcore", str(src2))
+        mfs.import_file("cam1", "patchcore", str(src2))
         mfs.activate(mf["id"])
         active = mfs.get_active("cam1", "patchcore")
         assert active["id"] == mf["id"]

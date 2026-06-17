@@ -19,6 +19,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-qt>=4.4.0",
+    "ruff>=0.8.0",
 ]
 packaging = [
     "pyinstaller>=6.0.0",
@@ -32,6 +33,9 @@ ml = [
 [tool.ruff]
 target-version = "py311"
 line-length = 120
+exclude = [
+    "app/infrastructure/camera/mvs/sdk",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.model_check import ModuleCheck, main as model_check_main
+from app.model_check import ModuleCheck, check_models, main as model_check_main
 
 
 def _write_config(path: Path, data: dict) -> None:
@@ -92,6 +92,59 @@ def test_model_check_warmup_passes_seat_model_id(tmp_path: Path, monkeypatch, ca
     assert payload["status"] == "OK"
     assert payload["seat_model_id"] == "MODEL_A"
     assert calls == ["MODEL_A", "shutdown"]
+
+
+def test_model_check_uses_runtime_camera_configs_for_warmup(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "config.json"
+    _write_config(
+        config_path,
+        {
+            "app": {"inspection_mode": "continuous"},
+            "cameras": [],
+        },
+    )
+    runtime_cameras = [
+        {
+            "camera_id": "CAM_RUNTIME",
+            "type": "file_watcher",
+            "enabled": True,
+            "patchcore_model_path": "./runtime.pt",
+        }
+    ]
+    calls = []
+
+    class FakeInspectionService:
+        def __init__(self, config) -> None:
+            self.config = config
+
+        def set_active_camera_configs(self, cameras, *, seat_model_id=None) -> None:
+            calls.append(("set", cameras, seat_model_id))
+
+        def warmup(self, *, seat_model_id=None) -> None:
+            calls.append(("warmup", seat_model_id))
+
+        def shutdown(self) -> None:
+            calls.append(("shutdown", None))
+
+    monkeypatch.setattr(
+        "app.model_check._check_runtime_modules",
+        lambda **_: [ModuleCheck(name="torch", status="OK", message="imported", version="2.0 (cpu)")],
+    )
+    monkeypatch.setattr("app.model_check.InspectionService", FakeInspectionService)
+
+    result = check_models(
+        config_path=config_path,
+        seat_model_id="MODEL_A",
+        camera_configs=runtime_cameras,
+    )
+
+    assert result.status == "OK"
+    assert result.camera_count == 1
+    assert calls == [
+        ("set", runtime_cameras, "MODEL_A"),
+        ("warmup", "MODEL_A"),
+        ("shutdown", None),
+    ]
 
 
 def test_model_check_returns_failure_when_import_fails(tmp_path: Path, monkeypatch, capsys) -> None:

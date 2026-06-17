@@ -24,6 +24,9 @@ class HotReloadService:
         except OSError:
             self._watch_paths[path] = 0.0
 
+    def clear(self) -> None:
+        self._watch_paths.clear()
+
     def on_change(self, callback: callable) -> None:
         self._callback = callback
 

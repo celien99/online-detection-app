@@ -39,10 +39,10 @@ class ConfigPersistenceService:
 
         # Migrate cameras
         cameras = data.get("cameras", [])
-        existing = {c["camera_id"] for c in self.list_cameras()}
+        existing = {(c.get("seat_model_id", ""), c["camera_id"]) for c in self.list_cameras()}
         for idx, cam in enumerate(cameras):
             cid = cam.get("camera_id", "")
-            if not cid or cid in existing:
+            if not cid or ("default", cid) in existing:
                 continue
             fc = cam.get("filter_classifier", {})
             self.create_camera({
@@ -87,7 +87,8 @@ class ConfigPersistenceService:
                 updated_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS camera_configs (
-                camera_id TEXT PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                camera_id TEXT NOT NULL,
                 seat_model_id TEXT NOT NULL,
                 type TEXT DEFAULT 'mvs',
                 source TEXT NOT NULL DEFAULT '',
@@ -99,10 +100,12 @@ class ConfigPersistenceService:
                 display_order INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                UNIQUE (seat_model_id, camera_id),
                 FOREIGN KEY (seat_model_id) REFERENCES seat_models(id)
             );
             CREATE TABLE IF NOT EXISTS model_files (
                 id TEXT PRIMARY KEY,
+                seat_model_id TEXT NOT NULL DEFAULT '',
                 camera_id TEXT NOT NULL,
                 model_type TEXT NOT NULL,
                 file_path TEXT NOT NULL,
@@ -118,12 +121,12 @@ class ConfigPersistenceService:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS idx_camera_seat ON camera_configs(seat_model_id);
-            CREATE INDEX IF NOT EXISTS idx_model_camera ON model_files(camera_id);
-            CREATE INDEX IF NOT EXISTS idx_model_active ON model_files(camera_id, model_type, is_active);
         """)
+        _ensure_camera_config_scoped_schema(conn)
         _ensure_camera_patchcore_column(conn)
         _ensure_camera_regions_column(conn)
+        _ensure_model_file_seat_model_column(conn)
+        _ensure_camera_indexes(conn)
         conn.commit()
 
     # ---------------------------------------------------------------- K-V config
@@ -259,12 +262,19 @@ class ConfigPersistenceService:
                 ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_camera(self, camera_id: str) -> dict | None:
+    def get_camera(self, camera_id: str, seat_model_id: str | None = None) -> dict | None:
         with self._get_conn() as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM camera_configs WHERE camera_id = ?", (camera_id,)
-            ).fetchone()
+            if seat_model_id:
+                row = conn.execute(
+                    "SELECT * FROM camera_configs WHERE camera_id = ? AND seat_model_id = ?",
+                    (camera_id, seat_model_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT * FROM camera_configs WHERE camera_id = ? ORDER BY seat_model_id",
+                    (camera_id,),
+                ).fetchone()
         return dict(row) if row else None
 
     def create_camera(self, camera: dict) -> None:
@@ -290,7 +300,7 @@ class ConfigPersistenceService:
             )
             conn.commit()
 
-    def update_camera(self, camera_id: str, **kwargs: Any) -> None:
+    def update_camera(self, camera_id: str, seat_model_id: str | None = None, **kwargs: Any) -> None:
         allowed = {
             "type", "source", "enabled", "patchcore_model_path",
             "regions_json", "regions",
@@ -306,27 +316,46 @@ class ConfigPersistenceService:
             updates["regions_json"] = _regions_to_json(updates["regions_json"])
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
         set_clause = ", ".join(f"{k} = ?" for k in updates)
-        values = list(updates.values()) + [camera_id]
+        values = list(updates.values())
         with self._get_conn() as conn:
-            conn.execute(
-                f"UPDATE camera_configs SET {set_clause} WHERE camera_id = ?", values
-            )
+            if seat_model_id:
+                conn.execute(
+                    f"UPDATE camera_configs SET {set_clause} WHERE camera_id = ? AND seat_model_id = ?",
+                    values + [camera_id, seat_model_id],
+                )
+            else:
+                conn.execute(
+                    f"UPDATE camera_configs SET {set_clause} WHERE camera_id = ?",
+                    values + [camera_id],
+                )
             conn.commit()
 
-    def delete_camera(self, camera_id: str) -> None:
+    def delete_camera(self, camera_id: str, seat_model_id: str | None = None) -> None:
         with self._get_conn() as conn:
-            conn.execute("DELETE FROM camera_configs WHERE camera_id = ?", (camera_id,))
+            if seat_model_id:
+                conn.execute(
+                    "DELETE FROM camera_configs WHERE camera_id = ? AND seat_model_id = ?",
+                    (camera_id, seat_model_id),
+                )
+            else:
+                conn.execute("DELETE FROM camera_configs WHERE camera_id = ?", (camera_id,))
             conn.commit()
 
     # ---------------------------------------------------------------- Model files
 
     def list_model_files(
-        self, camera_id: str | None = None, model_type: str | None = None
+        self,
+        camera_id: str | None = None,
+        model_type: str | None = None,
+        seat_model_id: str | None = None,
     ) -> list[dict]:
         with self._get_conn() as conn:
             conn.row_factory = sqlite3.Row
             sql = "SELECT * FROM model_files WHERE 1=1"
             params: list = []
+            if seat_model_id is not None:
+                sql += " AND seat_model_id = ?"
+                params.append(seat_model_id)
             if camera_id:
                 sql += " AND camera_id = ?"
                 params.append(camera_id)
@@ -349,11 +378,11 @@ class ConfigPersistenceService:
         with self._get_conn() as conn:
             conn.execute(
                 """INSERT INTO model_files
-                   (id, camera_id, model_type, file_path, file_name, file_size,
+                   (id, seat_model_id, camera_id, model_type, file_path, file_name, file_size,
                     sha256, source, platform_version, is_active, imported_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    mf["id"], mf["camera_id"], mf["model_type"], mf["file_path"],
+                    mf["id"], mf.get("seat_model_id", ""), mf["camera_id"], mf["model_type"], mf["file_path"],
                     mf["file_name"], mf.get("file_size", 0),
                     mf.get("sha256", ""),
                     mf.get("source", "manual_import"),
@@ -367,14 +396,15 @@ class ConfigPersistenceService:
         with self._get_conn() as conn:
             # Verify the file_id exists and belongs to this camera+type
             row = conn.execute(
-                "SELECT id FROM model_files WHERE id = ? AND camera_id = ? AND model_type = ?",
+                "SELECT id, seat_model_id FROM model_files WHERE id = ? AND camera_id = ? AND model_type = ?",
                 (file_id, camera_id, model_type),
             ).fetchone()
             if row is None:
                 return  # silently ignore -- caller should validate
+            seat_model_id = row[1] or ""
             conn.execute(
-                "UPDATE model_files SET is_active = 0 WHERE camera_id = ? AND model_type = ?",
-                (camera_id, model_type),
+                "UPDATE model_files SET is_active = 0 WHERE seat_model_id = ? AND camera_id = ? AND model_type = ?",
+                (seat_model_id, camera_id, model_type),
             )
             conn.execute(
                 "UPDATE model_files SET is_active = 1 WHERE id = ?", (file_id,)
@@ -386,13 +416,20 @@ class ConfigPersistenceService:
             conn.execute("DELETE FROM model_files WHERE id = ?", (file_id,))
             conn.commit()
 
-    def get_active_model_path(self, camera_id: str, model_type: str) -> str | None:
+    def get_active_model_path(self, camera_id: str, model_type: str, seat_model_id: str | None = None) -> str | None:
         with self._get_conn() as conn:
-            row = conn.execute(
-                "SELECT file_path FROM model_files "
-                "WHERE camera_id = ? AND model_type = ? AND is_active = 1",
-                (camera_id, model_type),
-            ).fetchone()
+            if seat_model_id is not None:
+                row = conn.execute(
+                    "SELECT file_path FROM model_files "
+                    "WHERE seat_model_id = ? AND camera_id = ? AND model_type = ? AND is_active = 1",
+                    (seat_model_id, camera_id, model_type),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT file_path FROM model_files "
+                    "WHERE camera_id = ? AND model_type = ? AND is_active = 1",
+                    (camera_id, model_type),
+                ).fetchone()
         return row[0] if row else None
 
 
@@ -429,6 +466,83 @@ def _ensure_camera_patchcore_column(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE camera_configs ADD COLUMN patchcore_model_path TEXT DEFAULT ''")
 
 
+def _ensure_camera_config_scoped_schema(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(camera_configs)").fetchall()
+    has_surrogate_id = any(row[1] == "id" for row in columns)
+    camera_id_is_primary = any(row[1] == "camera_id" and row[5] for row in columns)
+    if has_surrogate_id and not camera_id_is_primary:
+        return
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "INSERT OR IGNORE INTO seat_models "
+        "(id, display_name, description, is_default, created_at, updated_at) "
+        "VALUES (?, ?, ?, 1, ?, ?)",
+        ("default", "默认型号", "旧相机配置自动迁移", now, now),
+    )
+    conn.execute("ALTER TABLE camera_configs RENAME TO camera_configs_legacy")
+    conn.execute("""
+        CREATE TABLE camera_configs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            camera_id TEXT NOT NULL,
+            seat_model_id TEXT NOT NULL,
+            type TEXT DEFAULT 'mvs',
+            source TEXT NOT NULL DEFAULT '',
+            enabled INTEGER DEFAULT 1,
+            patchcore_model_path TEXT DEFAULT '',
+            regions_json TEXT DEFAULT '[]',
+            filter_classifier_path TEXT DEFAULT '',
+            filter_classifier_enabled INTEGER DEFAULT 0,
+            display_order INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE (seat_model_id, camera_id),
+            FOREIGN KEY (seat_model_id) REFERENCES seat_models(id)
+        )
+    """)
+    legacy_columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(camera_configs_legacy)").fetchall()
+    }
+    if "seat_model_id" in legacy_columns:
+        conn.execute(f"""
+            INSERT OR IGNORE INTO seat_models
+                (id, display_name, description, is_default, created_at, updated_at)
+            SELECT DISTINCT
+                COALESCE(NULLIF(seat_model_id, ''), 'default'),
+                COALESCE(NULLIF(seat_model_id, ''), 'default'),
+                '旧相机配置自动迁移',
+                0,
+                '{now}',
+                '{now}'
+            FROM camera_configs_legacy
+        """)
+    select_seat_model = "COALESCE(NULLIF(seat_model_id, ''), 'default')" if "seat_model_id" in legacy_columns else "'default'"
+    select_type = "type" if "type" in legacy_columns else "'mvs'"
+    select_source = "source" if "source" in legacy_columns else "''"
+    select_enabled = "enabled" if "enabled" in legacy_columns else "1"
+    select_regions = "regions_json" if "regions_json" in legacy_columns else "'[]'"
+    select_patchcore = "patchcore_model_path" if "patchcore_model_path" in legacy_columns else "''"
+    select_filter_path = "filter_classifier_path" if "filter_classifier_path" in legacy_columns else "''"
+    select_filter_enabled = "filter_classifier_enabled" if "filter_classifier_enabled" in legacy_columns else "0"
+    select_display_order = "display_order" if "display_order" in legacy_columns else "0"
+    select_created_at = "created_at" if "created_at" in legacy_columns else f"'{now}'"
+    select_updated_at = "updated_at" if "updated_at" in legacy_columns else f"'{now}'"
+    conn.execute(f"""
+        INSERT OR IGNORE INTO camera_configs (
+            camera_id, seat_model_id, type, source, enabled,
+            patchcore_model_path, regions_json, filter_classifier_path,
+            filter_classifier_enabled, display_order, created_at, updated_at
+        )
+        SELECT
+            camera_id, {select_seat_model}, {select_type}, {select_source}, {select_enabled},
+            {select_patchcore}, {select_regions}, {select_filter_path},
+            {select_filter_enabled}, {select_display_order}, {select_created_at}, {select_updated_at}
+        FROM camera_configs_legacy
+    """)
+    conn.execute("DROP TABLE camera_configs_legacy")
+
+
 def _ensure_camera_regions_column(conn: sqlite3.Connection) -> None:
     columns = {
         row[1]
@@ -436,6 +550,26 @@ def _ensure_camera_regions_column(conn: sqlite3.Connection) -> None:
     }
     if "regions_json" not in columns:
         conn.execute("ALTER TABLE camera_configs ADD COLUMN regions_json TEXT DEFAULT '[]'")
+
+
+def _ensure_model_file_seat_model_column(conn: sqlite3.Connection) -> None:
+    columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(model_files)").fetchall()
+    }
+    if "seat_model_id" not in columns:
+        conn.execute("ALTER TABLE model_files ADD COLUMN seat_model_id TEXT NOT NULL DEFAULT ''")
+    conn.execute("DROP INDEX IF EXISTS idx_model_camera")
+    conn.execute("DROP INDEX IF EXISTS idx_model_active")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_model_camera ON model_files(seat_model_id, camera_id)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_model_active "
+        "ON model_files(seat_model_id, camera_id, model_type, is_active)"
+    )
+
+
+def _ensure_camera_indexes(conn: sqlite3.Connection) -> None:
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_camera_seat ON camera_configs(seat_model_id)")
 
 
 def _regions_to_json(value: Any) -> str:

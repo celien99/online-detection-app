@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import List
 
 from .config import FusionConfig
 from .core_types import CameraInspectionResult, InspectionResult

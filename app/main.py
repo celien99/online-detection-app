@@ -10,13 +10,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
-import cv2
-import numpy as np
-from PySide6.QtCore import QUrl, Qt, QTimer
+from PySide6.QtCore import QUrl, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-from app.infrastructure.camera.interface import CameraInterface
 from app.infrastructure.camera.manager import CameraManager
 from app.infrastructure.camera.factory import create_camera
 from app.infrastructure.config_store import ConfigStore
@@ -82,6 +79,18 @@ def _iter_patchcore_model_paths(cameras: list[dict[str, Any]]) -> list[str]:
             region_path = region.get("patchcore_model_path", "")
             if region_path:
                 paths.append(str(region_path))
+    return paths
+
+
+def _iter_runtime_reload_paths(cameras: list[dict[str, Any]]) -> list[str]:
+    paths = _iter_patchcore_model_paths(cameras)
+    for cam in cameras:
+        fc = cam.get("filter_classifier", {})
+        if fc.get("enabled") and fc.get("model_path"):
+            paths.append(str(fc["model_path"]))
+        rule_engine = cam.get("rule_engine", {})
+        if rule_engine.get("enabled") and rule_engine.get("deployed_rules_path"):
+            paths.append(str(rule_engine["deployed_rules_path"]))
     return paths
 
 
@@ -221,22 +230,46 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
         poll_seconds=offline_config.get("hot_reload_poll_seconds", 30),
     )
     active_seat_model_id = seat_model_service.get_default_model_id()
-    inspection_service.set_active_seat_model(active_seat_model_id)
+
+    current_runtime_base_cameras = config.get_camera_configs()
+
+    def _base_camera_configs_for_model(seat_model_id: str | None) -> list[dict[str, Any]]:
+        if seat_model_id and not current_runtime_base_cameras:
+            cameras = seat_model_service.get_cameras_as_config_list(seat_model_id)
+            if cameras:
+                return cameras
+        return current_runtime_base_cameras
+
+    def _runtime_camera_configs_for_model(seat_model_id: str | None) -> list[dict[str, Any]]:
+        return model_file_service.apply_active_files_to_cameras(
+            _base_camera_configs_for_model(seat_model_id),
+            seat_model_id=seat_model_id,
+        )
+
+    def _watch_runtime_paths(cameras: list[dict[str, Any]]) -> None:
+        hot_reload.clear()
+        for model_path in _iter_runtime_reload_paths(cameras):
+            hot_reload.watch(model_path)
+
+    def _apply_runtime_model_files(seat_model_id: str | None = None) -> list[dict[str, Any]]:
+        resolved_seat_model_id = seat_model_id if seat_model_id is not None else inspection_service.active_seat_model_id()
+        cameras = _runtime_camera_configs_for_model(resolved_seat_model_id)
+        inspection_service.set_active_camera_configs(cameras, seat_model_id=resolved_seat_model_id)
+        if offline_config.get("hot_reload_enabled", False):
+            _watch_runtime_paths(cameras)
+        return cameras
+
+    active_camera_configs = _apply_runtime_model_files(active_seat_model_id)
 
     # ── Hot reload ──
     if offline_config.get("hot_reload_enabled", False):
-        for cam in config.get_camera_configs():
-            fc = cam.get("filter_classifier", {})
-            if fc.get("enabled") and fc.get("model_path"):
-                hot_reload.watch(fc["model_path"])
-        for patchcore_path in _iter_patchcore_model_paths(config.get_camera_configs()):
-            hot_reload.watch(patchcore_path)
-        hot_reload.on_change(lambda: setattr(inspection_service, '_inspector', None))
+        _watch_runtime_paths(active_camera_configs)
+        hot_reload.on_change(inspection_service.reset_runtime)
         hot_reload.start()
 
     # ── Connect cameras ──
     camera_ids = []
-    for cam_config in config.get_camera_configs():
+    for cam_config in active_camera_configs:
         try:
             camera = create_camera(cam_config)
             camera_manager.register(camera)
@@ -292,34 +325,50 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     stats_vm = StatsViewModel(stats_collector)
     settings_vm = SettingsViewModel(config, persistence)
     review_vm = ReviewViewModel(log_engine)
-    diagnostics_vm = DiagnosticsViewModel(config, config_path)
+    diagnostics_vm = DiagnosticsViewModel(
+        config,
+        config_path,
+        camera_configs_provider=lambda: _runtime_camera_configs_for_model(
+            inspection_service.active_seat_model_id()
+        ),
+        seat_model_id_provider=inspection_service.active_seat_model_id,
+    )
+
+    def _on_deployed_models_changed(seat_model_id: str | None = None) -> list[dict[str, Any]]:
+        current_model_id = inspection_service.active_seat_model_id()
+        if seat_model_id and current_model_id and seat_model_id != current_model_id:
+            return _runtime_camera_configs_for_model(seat_model_id)
+        return _apply_runtime_model_files(seat_model_id)
+
+    model_deploy_vm: ModelDeployViewModel | None = None
 
     def _on_seat_model_switch(new_model_id: str) -> None:
-        cameras = seat_model_service.get_cameras_as_config_list(new_model_id)
+        nonlocal current_runtime_base_cameras
+        current_runtime_base_cameras = seat_model_service.get_cameras_as_config_list(new_model_id)
+        cameras = _apply_runtime_model_files(new_model_id)
         runtime_cameras = []
         for cam_cfg in cameras:
             camera = create_camera(cam_cfg)
             runtime_cameras.append(camera)
         camera_manager.replace_all(runtime_cameras)
-        inspection_service.set_active_camera_configs(cameras, seat_model_id=new_model_id)
         main_vm._camera_list.clear()
         main_vm._camera_index.clear()
-        for idx, cam_cfg in enumerate(cameras):
+        for cam_cfg in cameras:
             cid = cam_cfg["camera_id"]
             entry = {"cameraId": cid, "live": False, "status": "ok", "defectLabel": "", "frameVersion": 0}
             main_vm._camera_list.append(entry)
             main_vm._camera_index[cid] = entry
         main_vm.cameraListChanged.emit()
-        hot_reload._paths.clear()
-        for cam in cameras:
-            fc = cam.get("filter_classifier", {})
-            if fc.get("enabled") and fc.get("model_path"):
-                hot_reload.watch(fc["model_path"])
-        for patchcore_path in _iter_patchcore_model_paths(cameras):
-            hot_reload.watch(patchcore_path)
+        if model_deploy_vm is not None:
+            model_deploy_vm.setSeatModel(new_model_id)
 
     seat_model_vm = SeatModelViewModel(seat_model_service, on_switch=_on_seat_model_switch)
-    model_deploy_vm = ModelDeployViewModel(model_file_service, platform_sync)
+    model_deploy_vm = ModelDeployViewModel(
+        model_file_service,
+        platform_sync,
+        seat_model_service,
+        on_runtime_models_changed=_on_deployed_models_changed,
+    )
 
     # Load QML
     qml_path = str(Path(__file__).parent / "qml" / "main.qml")
@@ -440,7 +489,7 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                 output = future.result(timeout=5.0)
                 _handle_inspection_response(output, valid_frames, publish_frames=False)
 
-            except Exception as exc:
+            except Exception:
                 logger.exception("Inspection loop failed; marking frames as REJECT")
                 # Fail-safe: treat inference failure as potential defect so no
                 # real defect escapes detection due to a pipeline error.

@@ -45,11 +45,11 @@ class SeatModelService:
         camera["seat_model_id"] = model_id
         self._p.create_camera(camera)
 
-    def remove_camera(self, camera_id: str) -> None:
-        self._p.delete_camera(camera_id)
+    def remove_camera(self, camera_id: str, model_id: str | None = None) -> None:
+        self._p.delete_camera(camera_id, seat_model_id=model_id)
 
-    def update_camera(self, camera_id: str, **kwargs: Any) -> None:
-        self._p.update_camera(camera_id, **kwargs)
+    def update_camera(self, camera_id: str, model_id: str | None = None, **kwargs: Any) -> None:
+        self._p.update_camera(camera_id, seat_model_id=model_id, **kwargs)
 
     def get_cameras_as_config_list(self, model_id: str) -> List[Dict[str, Any]]:
         """将 SQLite 中的相机数据转回 seat_defect_core 期望的 config dict 格式。"""

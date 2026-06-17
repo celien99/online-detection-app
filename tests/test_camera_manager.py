@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from app.infrastructure.camera.interface import CameraInterface, CameraStatus
 from app.infrastructure.camera.manager import CameraManager

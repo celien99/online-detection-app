@@ -10,6 +10,15 @@ Rectangle {
 
     property var viewModel: null
 
+    ToastNotification {
+        id: toast
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: Theme.spacingMD
+        anchors.rightMargin: Theme.spacingMD
+        z: 100
+    }
+
     Component.onCompleted: {
         if (viewModel) {
             viewModel.refresh()
@@ -58,6 +67,79 @@ Rectangle {
                 onClicked: {
                     if (viewModel) {
                         viewModel.refresh()
+                    }
+                }
+            }
+
+            ActionButton {
+                buttonText: qsTr("生成验收报告")
+                bgColor: Theme.accentGreen
+                textColor: "#000000"
+                implicitHeight: 34
+                Layout.preferredWidth: 132
+                onClicked: {
+                    if (viewModel) {
+                        var ok = viewModel.generateSiteReport()
+                        toast.show(viewModel.reportMessage, ok ? "success" : "error")
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: reportColumn.implicitHeight + Theme.spacingMD * 2
+            color: Theme.bgSecondary
+            radius: Theme.radiusSM
+            border { width: 1; color: Theme.borderDefault }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: Theme.spacingMD
+                spacing: Theme.spacingMD
+
+                Rectangle {
+                    Layout.preferredWidth: 72
+                    Layout.preferredHeight: 28
+                    radius: Theme.radiusSM
+                    color: statusColor(viewModel ? viewModel.reportStatus : "idle", true)
+                    border { width: 1; color: statusColor(viewModel ? viewModel.reportStatus : "idle", false) }
+                    Text {
+                        anchors.centerIn: parent
+                        text: viewModel ? viewModel.reportStatus : "idle"
+                        color: statusColor(viewModel ? viewModel.reportStatus : "idle", false)
+                        font.pixelSize: Theme.fontSizeXS
+                        font.bold: true
+                    }
+                }
+
+                ColumnLayout {
+                    id: reportColumn
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    Text {
+                        text: qsTr("现场验收报告")
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        font.bold: true
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: viewModel
+                              ? (viewModel.reportMessage || qsTr("尚未生成报告"))
+                              : qsTr("尚未生成报告")
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeXS
+                        elide: Text.ElideMiddle
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        visible: viewModel && viewModel.lastReportPath !== ""
+                        text: viewModel ? viewModel.lastReportPath : ""
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fontSizeXS
+                        elide: Text.ElideMiddle
                     }
                 }
             }

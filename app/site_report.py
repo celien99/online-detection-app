@@ -98,6 +98,7 @@ def collect_site_report(
     config: ConfigStore,
     config_path: Path,
     camera_samples_dir: Path,
+    camera_configs: list[dict[str, Any]] | None = None,
     camera_frames: int = 1,
     camera_timeout_ms: int = 2000,
     log_tail_lines: int = 80,
@@ -113,11 +114,16 @@ def collect_site_report(
     defect_code: int = 9001,
 ) -> dict[str, Any]:
     site_root = config_path.resolve().parent
-    diagnostics = ProductionDiagnostics(config, config_path).run().to_dict()
+    diagnostics = ProductionDiagnostics(
+        config,
+        config_path,
+        camera_configs=camera_configs,
+    ).run().to_dict()
     model_check = _collect_model_check(
         config_path=config_path,
         skip=skip_model_check,
         seat_model_id=seat_model_id,
+        camera_configs=camera_configs,
     )
     line_signal = asdict(
         check_line_signal(
@@ -133,6 +139,7 @@ def collect_site_report(
     mvs_devices = _collect_mvs_devices(skip=skip_mvs_list)
     camera_items = _collect_camera_checks(
         config=config,
+        camera_configs=camera_configs,
         samples_dir=camera_samples_dir,
         frames=camera_frames,
         timeout_ms=camera_timeout_ms,
@@ -163,7 +170,13 @@ def collect_site_report(
     }
 
 
-def _collect_model_check(*, config_path: Path, skip: bool, seat_model_id: str | None) -> dict[str, Any]:
+def _collect_model_check(
+    *,
+    config_path: Path,
+    skip: bool,
+    seat_model_id: str | None,
+    camera_configs: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
     if skip:
         return {
             "status": "SKIP",
@@ -171,12 +184,13 @@ def _collect_model_check(*, config_path: Path, skip: bool, seat_model_id: str | 
             "seat_model_id": seat_model_id or "",
             "runtime_modules": [],
         }
-    return asdict(
-        check_models(
-            config_path=config_path,
-            seat_model_id=seat_model_id,
-        )
-    )
+    kwargs: dict[str, Any] = {
+        "config_path": config_path,
+        "seat_model_id": seat_model_id,
+    }
+    if camera_configs is not None:
+        kwargs["camera_configs"] = camera_configs
+    return asdict(check_models(**kwargs))
 
 
 def _collect_mvs_devices(*, skip: bool) -> dict[str, Any]:
@@ -198,13 +212,14 @@ def _collect_mvs_devices(*, skip: bool) -> dict[str, Any]:
 def _collect_camera_checks(
     *,
     config: ConfigStore,
+    camera_configs: list[dict[str, Any]] | None,
     samples_dir: Path,
     frames: int,
     timeout_ms: int,
     skip: bool,
     connect_only: bool,
 ) -> dict[str, Any]:
-    camera_configs = config.get_camera_configs()
+    camera_configs = camera_configs if camera_configs is not None else config.get_camera_configs()
     if skip:
         return {"status": "SKIP", "message": "Camera check skipped", "items": []}
     if not camera_configs:

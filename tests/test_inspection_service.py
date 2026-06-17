@@ -322,3 +322,44 @@ class TestInspectionService:
 
         assert svc._can_use_mock_runtime() is True
         svc.shutdown()
+
+    def test_mock_runtime_checks_active_camera_configs(self, tmp_path: Path) -> None:
+        from app.services.inspection_service import InspectionService
+
+        config_path = tmp_path / "config.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "app": {"mock_runtime_enabled": True},
+                    "cameras": [
+                        {
+                            "camera_id": "CAM_LOCAL",
+                            "type": "file_watcher",
+                            "enabled": True,
+                            "patchcore_model_path": "",
+                            "filter_classifier": {"enabled": False},
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        svc = InspectionService(ConfigStore(str(config_path)))
+        assert svc._can_use_mock_runtime() is True
+
+        svc.set_active_camera_configs(
+            [
+                {
+                    "camera_id": "CAM_LOCAL",
+                    "type": "file_watcher",
+                    "enabled": True,
+                    "patchcore_model_path": "./active_model.npz",
+                    "filter_classifier": {"enabled": False},
+                }
+            ],
+            seat_model_id="MODEL_A",
+        )
+
+        assert svc._can_use_mock_runtime() is False
+        svc.shutdown()

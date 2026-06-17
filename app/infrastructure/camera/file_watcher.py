@@ -1,7 +1,6 @@
 """File watcher camera adapter for debugging without real hardware."""
 from __future__ import annotations
 
-import os
 import time
 from pathlib import Path
 from typing import Optional

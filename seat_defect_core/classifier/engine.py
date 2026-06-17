@@ -7,13 +7,16 @@ from __future__ import annotations
 
 from pathlib import Path
 from time import perf_counter
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import cv2
 import numpy as np
 
 from ..config import FilterClassifierConfig
 from ..core_types import FilterClassifierResult
+
+if TYPE_CHECKING:
+    import torch
 
 # 与 ml/classifier/trainer.py:_build_transform() 保持严格一致
 _IMAGE_NET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -115,7 +118,7 @@ class FilterClassifierService:
                 diagnostics=diagnostics,
             )
 
-        except Exception as exc:
+        except Exception:
             diagnostics["total_ms"] = (perf_counter() - started_at) * 1000.0
             diagnostics["error_prediction_failed"] = 1.0
             return FilterClassifierResult(

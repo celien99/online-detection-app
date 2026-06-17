@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from ..classifier.engine import FilterClassifierService
-from ..config import CameraConfig, FilterClassifierConfig, InspectionConfig, PatchCoreConfig, RegionConfig
+from ..config import CameraConfig, InspectionConfig, PatchCoreConfig, RegionConfig
 from ..cvops import ImageQualityGuard, RoiRefineEngine
 from ..patchcore.features import _TorchPatchFeatureExtractor
 from ..patchcore import LoadedModelBundle, PatchCoreService

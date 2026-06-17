@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from app.services.alert_manager import AlertAction, AlertManager, AlertState
 from app.services.inspection_service import InspectionService
-from app.services.stats_collector import DailyStats, InspectionRecord, StatsCollector
+from app.services.stats_collector import StatsCollector
 
 if TYPE_CHECKING:
     from app.services.log_engine import LogEngine

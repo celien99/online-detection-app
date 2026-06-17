@@ -78,6 +78,7 @@ def check_models(
     *,
     config_path: Path,
     seat_model_id: str | None = None,
+    camera_configs: list[dict[str, Any]] | None = None,
     skip_warmup: bool = False,
     basic: bool = False,
     include_training: bool = False,
@@ -88,7 +89,8 @@ def check_models(
     service: InspectionService | None = None
     try:
         config = ConfigStore(str(config_path))
-        camera_count = len(config.get_camera_configs())
+        active_cameras = camera_configs if camera_configs is not None else config.get_camera_configs()
+        camera_count = len([camera for camera in active_cameras if camera.get("enabled", True)])
         failed_imports = [item for item in modules if item.status == "FAIL"]
         if failed_imports:
             return _result(
@@ -124,6 +126,8 @@ def check_models(
                 started=started,
             )
         service = InspectionService(config)
+        if camera_configs is not None:
+            service.set_active_camera_configs(camera_configs, seat_model_id=seat_model_id)
         service.warmup(seat_model_id=seat_model_id)
         return _result(
             status="OK",

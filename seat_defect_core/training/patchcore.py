@@ -61,7 +61,6 @@ def train_patchcore(
         PatchCoreConfig,
     )
     from ..config_file import resolve_config
-    from ..patchcore.engine import PatchCoreService
     from ..patchcore.features import _TorchPatchFeatureExtractor
     from ..patchcore.scoring import _determine_memory_bank_size, coreset_subsample_indices
 
@@ -373,7 +372,6 @@ def train_patchcore_cli() -> None:
 
 def _find_camera(inspection_cfg, camera_id: str):
     """在配置中查找指定相机。"""
-    from ..config import SeatModelConfig
 
     # 直接相机列表
     for cam in getattr(inspection_cfg, "cameras", []) or []:

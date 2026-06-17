@@ -4,6 +4,7 @@ from __future__ import annotations
 import concurrent.futures
 import threading
 import time
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -55,8 +56,14 @@ class InspectionService:
         """Override runtime cameras for the selected seat model."""
         normalized = seat_model_id.strip() if isinstance(seat_model_id, str) else ""
         with self._state_lock:
-            self._active_camera_configs = [dict(camera) for camera in cameras]
+            self._active_camera_configs = deepcopy(cameras)
             self._active_seat_model_id = normalized or None
+            self._inspector = None
+            self._warmed_up = False
+
+    def reset_runtime(self) -> None:
+        """Drop the cached inspector so the next inspection reloads current model files."""
+        with self._state_lock:
             self._inspector = None
             self._warmed_up = False
 
@@ -67,7 +74,7 @@ class InspectionService:
     def _runtime_camera_configs(self) -> list[dict[str, Any]]:
         with self._state_lock:
             if self._active_camera_configs is not None:
-                return [dict(camera) for camera in self._active_camera_configs]
+                return deepcopy(self._active_camera_configs)
         return self._config.get_camera_configs()
 
     def init_inspector(self) -> None:
@@ -87,7 +94,7 @@ class InspectionService:
         """Allow GUI/file-watcher debugging without installing the ML runtime."""
         if not self._config.get_app_config().get("mock_runtime_enabled", False):
             return False
-        cameras = self._config.get_camera_configs()
+        cameras = self._runtime_camera_configs()
         if not cameras:
             return False
         for cam in cameras:

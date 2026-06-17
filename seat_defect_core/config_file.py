@@ -5,7 +5,7 @@ from __future__ import annotations
 import configparser
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 _INI_SUFFIXES = {".ini", ".cfg"}
 _LIST_KEYS = {"box", "debug_artifact_names", "feature_layers"}

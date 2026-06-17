@@ -1,7 +1,7 @@
 """ViewModel for LogScreen."""
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
@@ -48,5 +48,5 @@ class LogViewModel(QObject):
 
     @Slot()
     def clearOldLogs(self) -> None:
-        count = self._engine.cleanup_old()
+        self._engine.cleanup_old()
         self.refresh()

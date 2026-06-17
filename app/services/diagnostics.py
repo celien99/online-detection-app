@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import sys
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -43,9 +44,21 @@ class DiagnosticReport:
 class ProductionDiagnostics:
     """Runs non-destructive checks useful before starting a production shift."""
 
-    def __init__(self, config: ConfigStore, config_path: str | Path) -> None:
+    def __init__(
+        self,
+        config: ConfigStore,
+        config_path: str | Path,
+        *,
+        camera_configs: list[dict[str, Any]] | None = None,
+    ) -> None:
         self._config = config
         self._base_dir = Path(config_path).resolve().parent
+        self._camera_configs = deepcopy(camera_configs) if camera_configs is not None else None
+
+    def _enabled_camera_configs(self) -> list[dict[str, Any]]:
+        if self._camera_configs is not None:
+            return [camera for camera in self._camera_configs if camera.get("enabled", True)]
+        return self._config.get_camera_configs()
 
     def run(self) -> DiagnosticReport:
         items: list[DiagnosticItem] = []
@@ -57,7 +70,7 @@ class ProductionDiagnostics:
         return DiagnosticReport(status=_overall_status(items), items=items)
 
     def _check_cameras(self) -> list[DiagnosticItem]:
-        cameras = self._config.get_camera_configs()
+        cameras = self._enabled_camera_configs()
         if not cameras:
             return [
                 DiagnosticItem(
@@ -151,7 +164,7 @@ class ProductionDiagnostics:
 
     def _check_model_files(self) -> list[DiagnosticItem]:
         items: list[DiagnosticItem] = []
-        for cam in self._config.get_camera_configs():
+        for cam in self._enabled_camera_configs():
             camera_id = cam.get("camera_id", "<unknown>")
             checks = [
                 ("PatchCore 模型", cam.get("patchcore_model_path")),

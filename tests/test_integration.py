@@ -4,7 +4,6 @@ from __future__ import annotations
 import time
 
 import numpy as np
-import pytest
 
 from app.infrastructure.camera.interface import CameraInterface, CameraStatus
 from app.infrastructure.camera.manager import CameraManager
@@ -31,20 +30,31 @@ class TestFullPipeline:
         mgr = CameraManager()
 
         class FakeCam(CameraInterface):
-            def __init__(self, cid): self._id = cid; self._c = False
+            def __init__(self, cid):
+                self._id = cid
+                self._c = False
+
             @property
             def camera_id(self): return self._id
+
             @property
             def is_connected(self): return self._c
+
             @property
             def width(self): return 640
+
             @property
             def height(self): return 480
+
             @property
             def fps(self): return 30.0
+
             def connect(self): self._c = True
+
             def disconnect(self): self._c = False
+
             def grab_frame(self, timeout_ms=1000): return np.zeros((480, 640, 3), dtype=np.uint8)
+
             def get_status(self): return CameraStatus(camera_id=self._id, connected=self._c)
 
         for i in range(4):
