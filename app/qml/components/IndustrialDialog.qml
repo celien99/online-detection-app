@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls.Basic
 import styles
 
 Rectangle {
@@ -10,6 +11,7 @@ Rectangle {
     anchors.centerIn: parent
     visible: false
     z: 998
+    focus: visible
     radius: 14
     color: "#1a1e26"
     border { width: 1; color: Qt.rgba(1, 1, 1, 0.1) }
@@ -26,12 +28,17 @@ Rectangle {
     function open() {
         root.visible = true;
         root.opacity = 0;
+        root.forceActiveFocus();
         fadeIn.start();
     }
     function close() {
         fadeOut.start();
     }
 
+    Keys.onEscapePressed: {
+        root.rejected();
+        root.close();
+    }
     OpacityAnimator {
         id: fadeIn
         target: root
@@ -116,46 +123,26 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 10
 
-                Rectangle {
+                ActionButton {
                     visible: root.showCancel
-                    implicitWidth: 88; implicitHeight: 34; radius: 6
-                    color: cancelMouse.containsMouse
-                           ? Qt.rgba(1, 1, 1, 0.08)
-                           : "transparent"
-                    border { width: 1; color: Qt.rgba(1, 1, 1, 0.15) }
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                    Text {
-                        anchors.centerIn: parent
-                        text: root.cancelText
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSizeSM
-                    }
-                    MouseArea {
-                        id: cancelMouse
-                        anchors.fill: parent; hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: { root.rejected(); root.close(); }
-                    }
+                    buttonText: root.cancelText
+                    bgColor: Qt.rgba(1, 1, 1, 0.035)
+                    textColor: Theme.textSecondary
+                    borderColor: Qt.rgba(1, 1, 1, 0.15)
+                    implicitWidth: 88
+                    implicitHeight: 34
+                    compact: true
+                    onClicked: { root.rejected(); root.close(); }
                 }
 
-                Rectangle {
-                    implicitWidth: 88; implicitHeight: 34; radius: 6
-                    color: acceptMouse.containsMouse
-                           ? "#4169e1" : Theme.accent
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                    Text {
-                        anchors.centerIn: parent
-                        text: root.acceptText
-                        color: "#ffffff"
-                        font.pixelSize: Theme.fontSizeSM
-                        font.weight: Font.DemiBold
-                    }
-                    MouseArea {
-                        id: acceptMouse
-                        anchors.fill: parent; hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: { root.accepted(); root.close(); }
-                    }
+                ActionButton {
+                    buttonText: root.acceptText
+                    bgColor: Theme.accent
+                    textColor: "#ffffff"
+                    implicitWidth: 88
+                    implicitHeight: 34
+                    compact: true
+                    onClicked: { root.accepted(); root.close(); }
                 }
             }
         }

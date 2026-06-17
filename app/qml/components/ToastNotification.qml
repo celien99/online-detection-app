@@ -11,15 +11,17 @@ Rectangle {
     }
     radius: Theme.radiusMD
     height: 40
-    width: toastText.implicitWidth + Theme.spacingLG * 2
+    width: Math.min(Math.max(toastText.implicitWidth + Theme.spacingLG * 2, 180), 520)
     opacity: 0
     y: 20
+    clip: true
 
     property string message: ""
     property string level: "success"
     property int duration: Theme.animToast
 
     function show(msg, lvl) {
+        hideTimer.stop();
         message = msg;
         level = lvl || "success";
         opacity = 1;
@@ -45,7 +47,7 @@ Rectangle {
     }
 
     onOpacityChanged: {
-        if (opacity === 0 && !hideTimer.running) {
+        if (opacity === 0) {
             visible = false;
         }
     }
@@ -53,9 +55,12 @@ Rectangle {
     Text {
         id: toastText
         anchors.centerIn: parent
+        width: parent.width - Theme.spacingLG
         text: toastRoot.message
         color: "#000"
         font.pixelSize: Theme.fontSizeXS
         font.bold: true
+        horizontalAlignment: Text.AlignHCenter
+        elide: Text.ElideRight
     }
 }

@@ -93,3 +93,10 @@ class AlertManager:
                     self.on_alert_dismissed(alert)
                 return alert
         return None
+
+    def update_config(self, *, timeout_seconds: float, default_action: str) -> None:
+        with self._lock:
+            self._timeout_seconds = timeout_seconds
+            self._default_action = AlertAction(default_action)
+            if self._current is not None and not self._current.acknowledged:
+                self._current.timeout_seconds = timeout_seconds

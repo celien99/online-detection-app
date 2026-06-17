@@ -50,6 +50,9 @@ class MainViewModel(QObject):
     lineBusyChanged = Signal()
     lastTriggerResultChanged = Signal()
     triggerErrorChanged = Signal()
+    triggerErrorDisplayChanged = Signal()
+    triggerEnabledChanged = Signal()
+    gridLayoutChanged = Signal()
 
     def __init__(
         self,
@@ -124,6 +127,9 @@ class MainViewModel(QObject):
     def _get_line_busy(self) -> bool: return self._line_busy
     def _get_last_trigger_result(self) -> str: return self._last_trigger_result
     def _get_trigger_error(self) -> str: return self._trigger_error
+    def _get_trigger_error_display(self) -> str: return _trigger_error_display(self._trigger_error)
+    def _get_trigger_enabled(self) -> bool: return self._trigger_service is not None
+    def _get_grid_layout(self) -> str: return self._grid_layout
 
     lineId = Property(str, _get_line_id, notify=lineIdChanged)
     systemStatus = Property(str, _get_system_status, notify=systemStatusChanged)
@@ -142,6 +148,9 @@ class MainViewModel(QObject):
     lineBusy = Property(bool, _get_line_busy, notify=lineBusyChanged)
     lastTriggerResult = Property(str, _get_last_trigger_result, notify=lastTriggerResultChanged)
     triggerError = Property(str, _get_trigger_error, notify=triggerErrorChanged)
+    triggerErrorDisplay = Property(str, _get_trigger_error_display, notify=triggerErrorDisplayChanged)
+    triggerEnabled = Property(bool, _get_trigger_enabled, notify=triggerEnabledChanged)
+    gridLayout = Property(str, _get_grid_layout, notify=gridLayoutChanged)
 
     # ── Slots ──
 
@@ -160,7 +169,7 @@ class MainViewModel(QObject):
     @Slot()
     def manualTrigger(self) -> None:
         if self._trigger_service is None:
-            self._set_trigger_error("trigger_service_not_started")
+            self._set_trigger_error("manual_trigger_disabled")
             return
         try:
             if self._trigger_service.manual_trigger():
@@ -173,10 +182,56 @@ class MainViewModel(QObject):
         self._sync_trigger_state()
 
     def set_trigger_service(self, trigger_service: Any) -> None:
+        was_enabled = self._trigger_service is not None
         self._trigger_service = trigger_service
         self._system_status = "running"
         self.systemStatusChanged.emit()
+        if not was_enabled:
+            self.triggerEnabledChanged.emit()
         self._sync_trigger_state()
+
+    def clear_trigger_service(self) -> None:
+        was_enabled = self._trigger_service is not None
+        self._trigger_service = None
+        self._line_status = "unknown"
+        self._line_connected = False
+        self._line_busy = False
+        self._last_trigger_result = ""
+        self._trigger_error = ""
+        self.lineStatusChanged.emit()
+        self.lineConnectedChanged.emit()
+        self.lineBusyChanged.emit()
+        self.lastTriggerResultChanged.emit()
+        self.triggerErrorChanged.emit()
+        self.triggerErrorDisplayChanged.emit()
+        if was_enabled:
+            self.triggerEnabledChanged.emit()
+
+    def apply_runtime_config(self, *, line_id: str, grid_layout: str, camera_ids: List[str]) -> None:
+        if self._line_id != line_id:
+            self._line_id = line_id
+            self.lineIdChanged.emit()
+        if self._grid_layout != grid_layout:
+            self._grid_layout = grid_layout
+            self.gridLayoutChanged.emit()
+
+        old_by_id = {entry["cameraId"]: entry for entry in self._camera_list}
+        new_list: List[Dict[str, Any]] = []
+        new_index: Dict[str, Dict[str, Any]] = {}
+        for cid in camera_ids:
+            previous = old_by_id.get(cid, {})
+            entry = {
+                "cameraId": cid,
+                "live": bool(previous.get("live", False)),
+                "status": str(previous.get("status", "ok")),
+                "defectLabel": str(previous.get("defectLabel", "")),
+                "frameVersion": int(previous.get("frameVersion", 0)),
+            }
+            new_list.append(entry)
+            new_index[cid] = entry
+        self._camera_list = new_list
+        self._camera_index = new_index
+        self.cameraListChanged.emit()
 
     # ── Internal ──
 
@@ -306,12 +361,14 @@ class MainViewModel(QObject):
         if self._trigger_error != state.last_error:
             self._trigger_error = state.last_error
             self.triggerErrorChanged.emit()
+            self.triggerErrorDisplayChanged.emit()
 
     def _set_trigger_error(self, message: str) -> None:
         if self._trigger_error == message:
             return
         self._trigger_error = message
         self.triggerErrorChanged.emit()
+        self.triggerErrorDisplayChanged.emit()
 
 
 def _camera_defect_label(camera_result: Any) -> str:
@@ -350,3 +407,13 @@ def _primary_ng_region(camera_result: Any) -> Any:
         ng_regions,
         key=lambda region: float(getattr(getattr(region, "texture_result", None), "score", 0.0) or 0.0),
     )
+
+
+def _trigger_error_display(message: str) -> str:
+    if not message:
+        return ""
+    return {
+        "capture_timeout_no_frames": "取帧超时：未收到相机图像",
+        "manual_trigger_disabled": "手动触发仅在触发模式可用",
+        "trigger_service_not_started": "触发服务未启动",
+    }.get(message, message)

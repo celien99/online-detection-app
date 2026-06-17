@@ -36,6 +36,7 @@ Rectangle {
 
     Connections {
         target: modelDeployScreen.viewModel
+        ignoreUnknownSignals: true
         function onToast(message, level) { toast.show(message, level); }
     }
 
@@ -196,13 +197,20 @@ Rectangle {
                     border { width: 1; color: Theme.cardGlassBorder }
 
                     ColumnLayout {
-                        anchors.centerIn: parent
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.spacingMD
+                        anchors.rightMargin: Theme.spacingMD
                         spacing: 4
                         Text {
                             Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
                             text: modelData.label
                             color: Theme.textSecondary
                             font.pixelSize: Theme.fontSizeXS
+                            elide: Text.ElideRight
+                            horizontalAlignment: Text.AlignHCenter
                         }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
@@ -490,6 +498,15 @@ Rectangle {
                         }
                     }
                 }
+            }
+
+            EmptyState {
+                anchors.fill: parent
+                visible: fileList.count === 0
+                title: qsTr("暂无模型文件")
+                message: qsTr("可手动导入模型文件，或从离线平台同步可用版本。")
+                badgeText: qsTr("MODEL")
+                accentColor: Theme.accent
             }
         }
     }

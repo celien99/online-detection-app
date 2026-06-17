@@ -80,7 +80,9 @@ class CameraImageProvider(QQuickImageProvider):
             return empty
 
         if suffix == "_heatmap":
-            return self._render_heatmap(frame, heatmap)
+            if heatmap is not None:
+                return self._render_heatmap(frame, heatmap)
+            return self._bgr_to_qimage(frame)
 
         return self._bgr_to_qimage(frame)
 

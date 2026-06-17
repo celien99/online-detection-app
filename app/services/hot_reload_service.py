@@ -38,6 +38,18 @@ class HotReloadService:
     def stop(self) -> None:
         self._running = False
 
+    def replace_watch_paths(self, paths: list[str], *, poll_seconds: float | None = None, enabled: bool = True) -> None:
+        if poll_seconds is not None:
+            self._poll_seconds = poll_seconds
+        self._watch_paths.clear()
+        for path in paths:
+            self.watch(path)
+        if not enabled:
+            self.stop()
+            return
+        if not self._running:
+            self.start()
+
     def _poll_loop(self) -> None:
         while self._running:
             time.sleep(self._poll_seconds)

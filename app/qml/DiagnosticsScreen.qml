@@ -145,70 +145,88 @@ Rectangle {
             }
         }
 
-        ListView {
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            model: viewModel ? viewModel.items : []
-            spacing: Theme.spacingSM
-            clip: true
 
-            delegate: Rectangle {
-                width: ListView.view.width
-                height: Math.max(74, itemColumn.implicitHeight + Theme.spacingMD * 2)
-                color: Theme.bgSecondary
-                radius: Theme.radiusSM
-                border { width: 1; color: Theme.borderDefault }
+            ListView {
+                id: diagnosticsList
+                anchors.fill: parent
+                model: viewModel ? viewModel.items : []
+                spacing: Theme.spacingSM
+                clip: true
+                visible: count > 0
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMD
-                    spacing: Theme.spacingMD
+                delegate: Rectangle {
+                    width: ListView.view.width
+                    height: Math.max(74, itemColumn.implicitHeight + Theme.spacingMD * 2)
+                    color: Theme.bgSecondary
+                    radius: Theme.radiusSM
+                    border { width: 1; color: Theme.borderDefault }
 
-                    Rectangle {
-                        Layout.preferredWidth: 64
-                        Layout.preferredHeight: 28
-                        radius: Theme.radiusSM
-                        color: statusColor(modelData.status, true)
-                        border { width: 1; color: statusColor(modelData.status, false) }
-                        Text {
-                            anchors.centerIn: parent
-                            text: modelData.status || "WARN"
-                            color: statusColor(modelData.status, false)
-                            font.pixelSize: Theme.fontSizeXS
-                            font.bold: true
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacingMD
+                        spacing: Theme.spacingMD
+
+                        Rectangle {
+                            Layout.preferredWidth: 64
+                            Layout.preferredHeight: 28
+                            radius: Theme.radiusSM
+                            color: statusColor(modelData.status, true)
+                            border { width: 1; color: statusColor(modelData.status, false) }
+                            Text {
+                                anchors.centerIn: parent
+                                width: parent.width - 8
+                                text: modelData.status || "WARN"
+                                color: statusColor(modelData.status, false)
+                                font.pixelSize: Theme.fontSizeXS
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                            }
                         }
-                    }
 
-                    ColumnLayout {
-                        id: itemColumn
-                        Layout.fillWidth: true
-                        spacing: 4
+                        ColumnLayout {
+                            id: itemColumn
+                            Layout.fillWidth: true
+                            spacing: 4
 
-                        Text {
-                            text: modelData.name || ""
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeSM
-                            font.bold: true
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: modelData.message || ""
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeXS
-                            wrapMode: Text.Wrap
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            visible: (modelData.suggestion || "") !== ""
-                            text: qsTr("建议: ") + modelData.suggestion
-                            color: Theme.statusWarning
-                            font.pixelSize: Theme.fontSizeXS
-                            wrapMode: Text.Wrap
-                            Layout.fillWidth: true
+                            Text {
+                                text: modelData.name || ""
+                                color: Theme.textPrimary
+                                font.pixelSize: Theme.fontSizeSM
+                                font.bold: true
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                text: modelData.message || ""
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSizeXS
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                visible: (modelData.suggestion || "") !== ""
+                                text: qsTr("建议: ") + modelData.suggestion
+                                color: Theme.statusWarning
+                                font.pixelSize: Theme.fontSizeXS
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                            }
                         }
                     }
                 }
+            }
+
+            EmptyState {
+                anchors.fill: parent
+                visible: diagnosticsList.count === 0
+                title: qsTr("暂无自检结果")
+                message: qsTr("点击“重新检查”后会显示配置、相机、模型和存储状态。")
+                badgeText: qsTr("CHECK")
+                accentColor: Theme.statusWarning
             }
         }
     }

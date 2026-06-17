@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, Property, Signal, Slot
 
 from app.infrastructure.config_store import ConfigStore
 from app.services.config_persistence import ConfigPersistenceService
+from app.services.runtime_config_apply import RuntimeConfigApplyResult
 
 
 class SettingsViewModel(QObject):
@@ -17,14 +18,29 @@ class SettingsViewModel(QObject):
     valueChanged = Signal(str)
     saved = Signal()
     saveFailed = Signal(str)
+    runtimeApplied = Signal(str)
+    runtimeApplyFailed = Signal(str)
+    restartRequired = Signal(str)
     importSucceeded = Signal()
     importFailed = Signal(str)
 
-    def __init__(self, config_store: ConfigStore, persistence: ConfigPersistenceService) -> None:
+    def __init__(
+        self,
+        config_store: ConfigStore,
+        persistence: ConfigPersistenceService,
+        apply_runtime_config: Callable[[set[str]], RuntimeConfigApplyResult] | None = None,
+    ) -> None:
         super().__init__()
         self._store = config_store
         self._persistence = persistence
+        self._apply_runtime_config = apply_runtime_config
         self._dirty_paths: set = set()
+
+    def set_runtime_apply_callback(
+        self,
+        apply_runtime_config: Callable[[set[str]], RuntimeConfigApplyResult] | None,
+    ) -> None:
+        self._apply_runtime_config = apply_runtime_config
 
     def _get_data(self) -> dict:
         return self._store.data
@@ -53,12 +69,24 @@ class SettingsViewModel(QObject):
     @Slot()
     def save(self) -> None:
         try:
+            dirty_paths = set(self._dirty_paths)
             self._store.save()
             self._dirty_paths.clear()
             self.saved.emit()
+            if self._apply_runtime_config is not None and dirty_paths:
+                result = self._apply_runtime_config(dirty_paths)
+                applied_message = result.applied_message()
+                restart_message = result.restart_message()
+                if applied_message:
+                    self.runtimeApplied.emit(applied_message)
+                if restart_message:
+                    self.restartRequired.emit(restart_message)
             self.configChanged.emit()
         except Exception as exc:
-            self.saveFailed.emit(str(exc))
+            if self._store.is_dirty:
+                self.saveFailed.emit(str(exc))
+            else:
+                self.runtimeApplyFailed.emit(str(exc))
 
     @Slot()
     def reload(self) -> None:

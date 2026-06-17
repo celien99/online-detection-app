@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from PySide6.QtCore import QUrl, QTimer
+from PySide6.QtCore import QUrl, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -38,6 +39,10 @@ from app.services.config_persistence import ConfigPersistenceService
 from app.services.seat_model_service import SeatModelService
 from app.services.model_file_service import ModelFileService
 from app.services.platform_sync_service import PlatformSyncService
+from app.services.runtime_config_apply import (
+    RuntimeConfigApplyResult,
+    classify_runtime_config_changes,
+)
 from app.viewmodels.seat_model_viewmodel import SeatModelViewModel
 from app.viewmodels.model_deploy_viewmodel import ModelDeployViewModel
 from app.runtime_paths import chdir_to_config_dir, resolve_config_path
@@ -293,6 +298,15 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
         pass
 
     # ── Start camera watchdog ──
+    runtime_lock = threading.RLock()
+    runtime_state: dict[str, Any] = {
+        "plc": plc,
+        "line_signal": line_signal,
+        "inspection_service": inspection_service,
+        "alert_manager": alert_manager,
+        "send_legacy_plc_defect": send_legacy_plc_defect,
+    }
+
     camera_manager.start_watchdog()
 
     # ── QML Application ──
@@ -428,6 +442,34 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     running = True
     trigger_service: TriggerService | None = None
 
+    def _replace_trigger_service(new_service: TriggerService | None) -> None:
+        nonlocal trigger_service
+        if trigger_service is not None:
+            trigger_service.stop()
+        trigger_service = new_service
+        if new_service is None:
+            main_vm.clear_trigger_service()
+            return
+        main_vm.set_trigger_service(new_service)
+        new_service.start()
+
+    def _create_trigger_service() -> TriggerService:
+        app_cfg = config.get_app_config()
+        return TriggerService(
+            adapter=runtime_state["line_signal"],
+            camera_manager=camera_manager,
+            inspection_service=runtime_state["inspection_service"],
+            handle_response=lambda output, frames: _handle_inspection_response(
+                output,
+                frames,
+                publish_frames=False,
+            ),
+            handle_frames=_publish_live_frames,
+            mode=runtime_mode,
+            poll_interval_s=float(app_cfg.get("trigger_poll_interval_s", 0.05)),
+            capture_timeout_s=float(app_cfg.get("capture_timeout_s", 2.0)),
+        )
+
     def _publish_live_frames(frames: dict) -> None:
         valid_frames = {cid: frame for cid, frame in frames.items() if frame is not None}
         if not valid_frames:
@@ -464,8 +506,11 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                 log_engine.insert(record)
                 if cr.status == "NG":
                     severity = Severity.CRITICAL if getattr(cr, 'severity', '') == 'critical' else Severity.MINOR
-                    if send_legacy_plc_defect:
-                        plc.send_defect_signal(DefectSignal(camera_id=cr.camera_id, severity=severity))
+                    with runtime_lock:
+                        current_plc = runtime_state["plc"]
+                        current_send_legacy = runtime_state["send_legacy_plc_defect"]
+                    if current_send_legacy:
+                        current_plc.send_defect_signal(DefectSignal(camera_id=cr.camera_id, severity=severity))
                     if hasattr(cr, 'texture_result') and cr.texture_result is not None:
                         amap = getattr(cr.texture_result, 'heatmap', None)
                         if amap is not None:
@@ -485,10 +530,12 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                     continue
 
                 _publish_live_frames(valid_frames)
-                future = inspection_service.inspect_async(valid_frames)
+                current_inspection = runtime_state["inspection_service"]
+                future = current_inspection.inspect_async(valid_frames)
                 output = future.result(timeout=5.0)
                 _handle_inspection_response(output, valid_frames, publish_frames=False)
 
+            except Exception:
             except Exception:
                 logger.exception("Inspection loop failed; marking frames as REJECT")
                 # Fail-safe: treat inference failure as potential defect so no
@@ -502,28 +549,16 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
                     )
                     stats_collector.record(record)
                     log_engine.insert(record)
-                    if send_legacy_plc_defect:
-                        plc.send_defect_signal(DefectSignal(camera_id=cid, severity=Severity.MINOR))
+                    with runtime_lock:
+                        current_plc = runtime_state["plc"]
+                        current_send_legacy = runtime_state["send_legacy_plc_defect"]
+                    if current_send_legacy:
+                        current_plc.send_defect_signal(DefectSignal(camera_id=cid, severity=Severity.MINOR))
                 main_vm.update_stats_from_collector()
                 time.sleep(0.1)
 
     if runtime_mode == TRIGGERED_MODE:
-        trigger_service = TriggerService(
-            adapter=line_signal,
-            camera_manager=camera_manager,
-            inspection_service=inspection_service,
-            handle_response=lambda output, frames: _handle_inspection_response(
-                output,
-                frames,
-                publish_frames=False,
-            ),
-            handle_frames=_publish_live_frames,
-            mode=runtime_mode,
-            poll_interval_s=float(app_config.get("trigger_poll_interval_s", 0.05)),
-            capture_timeout_s=float(app_config.get("capture_timeout_s", 2.0)),
-        )
-        main_vm.set_trigger_service(trigger_service)
-        trigger_service.start()
+        _replace_trigger_service(_create_trigger_service())
         logger.info("Started triggered inspection service")
     else:
         thread = threading.Thread(target=inspection_loop, daemon=True, name="inspection-loop")
@@ -533,7 +568,7 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
     # ── Timeout checker timer ──
     timer = QTimer()
     def _on_timer_tick() -> None:
-        alert_manager.check_timeout()
+        runtime_state["alert_manager"].check_timeout()
         main_vm.tick_countdown()
     timer.timeout.connect(_on_timer_tick)
     timer.start(1000)
@@ -549,10 +584,11 @@ def main(config_path: str | None = None, argv: list[str] | None = None) -> int:
         hot_reload.stop()
         if trigger_service is not None:
             trigger_service.stop()
+        camera_manager.shutdown()
         camera_manager.disconnect_all()
-        line_signal.disconnect()
-        plc.disconnect()
-        inspection_service.shutdown()
+        runtime_state["line_signal"].disconnect()
+        runtime_state["plc"].disconnect()
+        runtime_state["inspection_service"].shutdown()
         logger.info("Application cleanup finished")
 
     signal.signal(signal.SIGINT, lambda sig, frame: (cleanup(), app.quit()))

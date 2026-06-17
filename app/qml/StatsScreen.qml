@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls.Basic
 import "components"
 import styles
 
@@ -18,11 +19,24 @@ Rectangle {
         anchors.margins: Theme.spacingLG
         spacing: Theme.spacingLG
 
-        Text {
-            text: qsTr("Statistics")
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeLG
-            font.bold: true
+        RowLayout {
+            Layout.fillWidth: true
+            Text {
+                text: qsTr("生产统计")
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontSizeLG
+                font.bold: true
+                Layout.fillWidth: true
+            }
+            ActionButton {
+                buttonText: qsTr("刷新")
+                bgColor: Theme.bgTertiary
+                implicitHeight: 36
+                Layout.preferredWidth: 92
+                onClicked: {
+                    if (statsScreen.viewModel) statsScreen.viewModel.refresh()
+                }
+            }
         }
 
         // KPI cards
@@ -89,8 +103,10 @@ Rectangle {
             }
 
             ListView {
+                id: defectList
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                visible: count > 0
                 clip: true
                 model: {
                     var dist = statsScreen.viewModel ? statsScreen.viewModel.defectDistribution : ({});
@@ -113,14 +129,43 @@ Rectangle {
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeSM
                         Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    Rectangle {
+                        Layout.preferredWidth: 180
+                        Layout.preferredHeight: 8
+                        radius: 4
+                        color: Theme.bgTertiary
+                        clip: true
+
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: parent.width * Math.min(1, modelData.count / Math.max(statsScreen.ng, 1))
+                            radius: 4
+                            color: Theme.statusNG
+                        }
                     }
                     Text {
                         text: String(modelData.count)
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSizeSM
                         font.bold: true
+                        Layout.preferredWidth: 56
+                        horizontalAlignment: Text.AlignRight
                     }
                 }
+            }
+
+            EmptyState {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: defectList.count === 0
+                title: qsTr("今日暂无缺陷记录")
+                message: qsTr("缺陷分布会在 NG 记录产生后自动更新。")
+                badgeText: qsTr("OK")
+                accentColor: Theme.statusOK
             }
         }
     }

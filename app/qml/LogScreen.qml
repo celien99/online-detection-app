@@ -10,6 +10,23 @@ Rectangle {
 
     property var logModel: []
     property var viewModel: null
+    property var tableColumns: [
+        { title: qsTr("时间"), weight: 1.15 },
+        { title: qsTr("Camera"), weight: 1.05 },
+        { title: qsTr("状态"), weight: 0.65 },
+        { title: qsTr("缺陷"), weight: 1.25 },
+        { title: qsTr("置信度"), weight: 0.7 },
+        { title: qsTr("操作"), weight: 0.95 }
+    ]
+
+    function tableColumnWidth(weight) {
+        var totalWeight = 0
+        for (var i = 0; i < tableColumns.length; i++) {
+            totalWeight += tableColumns[i].weight
+        }
+        var available = Math.max(0, logList.width - Theme.spacingSM * 2 - 4 * (tableColumns.length - 1))
+        return Math.floor(available * weight / totalWeight)
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -87,117 +104,135 @@ Rectangle {
             }
         }
 
-        // Log table
-        ListView {
-            id: logList
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            model: logScreen.logModel
-            clip: true
 
-            // Table header
-            header: Rectangle {
-                width: logList.width
-                height: 32
-                color: Theme.bgTertiary
-                radius: Theme.radiusSM
-                Row {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacingSM
-                    anchors.rightMargin: Theme.spacingSM
-                    spacing: 4
-                    Repeater {
-                        model: [qsTr("时间"), qsTr("Camera"), qsTr("状态"), qsTr("缺陷"), qsTr("置信度"), qsTr("操作")]
-                        delegate: Rectangle {
-                            width: logList.width / 6
-                            height: 32
-                            color: "transparent"
+            // Log table
+            ListView {
+                id: logList
+                anchors.fill: parent
+                model: logScreen.logModel
+                clip: true
+                visible: count > 0
+
+                // Table header
+                header: Rectangle {
+                    width: logList.width
+                    height: 32
+                    color: Theme.bgTertiary
+                    radius: Theme.radiusSM
+                    Row {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.spacingSM
+                        anchors.rightMargin: Theme.spacingSM
+                        spacing: 4
+                        Repeater {
+                            model: logScreen.tableColumns
+                            delegate: Rectangle {
+                                width: logScreen.tableColumnWidth(modelData.weight)
+                                height: 32
+                                color: "transparent"
+                                Text {
+                                    anchors.centerIn: parent
+                                    width: parent.width - 4
+                                    text: modelData.title
+                                    color: Theme.textSecondary
+                                    font.pixelSize: Theme.fontSizeXS
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Row delegate
+                delegate: Rectangle {
+                    width: logList.width
+                    height: 36
+                    color: index % 2 === 0 ? Theme.bgPrimary : Theme.bgSecondary
+                    border {
+                        width: modelData.status === "NG" ? 1 : 0
+                        color: Theme.borderStrong
+                    }
+
+                    Row {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.spacingSM
+                        anchors.rightMargin: Theme.spacingSM
+                        spacing: 4
+
+                        Rectangle { width: logScreen.tableColumnWidth(logScreen.tableColumns[0].weight); height: parent.height; color: "transparent"
                             Text {
-                                anchors.centerIn: parent
-                                text: modelData
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - 4
+                                text: modelData.timestamp ? new Date(modelData.timestamp * 1000).toLocaleTimeString(Qt.locale()) : ""
                                 color: Theme.textSecondary
                                 font.pixelSize: Theme.fontSizeXS
-                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+                        }
+                        Rectangle { width: logScreen.tableColumnWidth(logScreen.tableColumns[1].weight); height: parent.height; color: "transparent"
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - 4
+                                text: modelData.camera_id || ""
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSizeXS
+                                elide: Text.ElideRight
+                            }
+                        }
+                        Rectangle { width: logScreen.tableColumnWidth(logScreen.tableColumns[2].weight); height: parent.height; color: "transparent"
+                            StatusBadge {
+                                anchors.verticalCenter: parent.verticalCenter
+                                badgeText: modelData.status || "--"
+                                badgeStatus: modelData.status === "NG" ? "ng" : (modelData.status === "OK" ? "ok" : "warning")
+                                maxBadgeWidth: parent.width
+                            }
+                        }
+                        Rectangle { width: logScreen.tableColumnWidth(logScreen.tableColumns[3].weight); height: parent.height; color: "transparent"
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - 4
+                                text: modelData.defect_type || "--"
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSizeXS
+                                elide: Text.ElideRight
+                            }
+                        }
+                        Rectangle { width: logScreen.tableColumnWidth(logScreen.tableColumns[4].weight); height: parent.height; color: "transparent"
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - 4
+                                text: modelData.confidence ? modelData.confidence.toFixed(3) : "--"
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSizeXS
+                                horizontalAlignment: Text.AlignRight
+                            }
+                        }
+                        Rectangle { width: logScreen.tableColumnWidth(logScreen.tableColumns[5].weight); height: parent.height; color: "transparent"
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - 4
+                                text: modelData.operator_action || "--"
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSizeXS
+                                elide: Text.ElideRight
                             }
                         }
                     }
                 }
             }
 
-            // Row delegate
-            delegate: Rectangle {
-                width: logList.width
-                height: 32
-                color: index % 2 === 0 ? Theme.bgPrimary : Theme.bgSecondary
-                border {
-                    width: modelData.status === "NG" ? 1 : 0
-                    color: Theme.borderStrong
-                }
-
-                Row {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacingSM
-                    anchors.rightMargin: Theme.spacingSM
-                    spacing: 4
-
-                    Rectangle { width: logList.width / 6; height: 32; color: "transparent"
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.timestamp ? new Date(modelData.timestamp * 1000).toLocaleTimeString(Qt.locale()) : ""
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                    }
-                    Rectangle { width: logList.width / 6; height: 32; color: "transparent"
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.camera_id || ""
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                    }
-                    Rectangle { width: logList.width / 6; height: 32; color: "transparent"
-                        Rectangle {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: statusLabel.implicitWidth + 10; height: 20; radius: Theme.radiusSM
-                            color: modelData.status === "NG" ? Theme.statusNGDim :
-                                   modelData.status === "OK" ? Theme.statusOKDim : Theme.statusRejectDim
-                            Text {
-                                id: statusLabel
-                                anchors.centerIn: parent
-                                text: modelData.status || ""
-                                color: modelData.status === "NG" ? Theme.statusNG :
-                                       modelData.status === "OK" ? Theme.statusOK : Theme.statusReject
-                                font.pixelSize: Theme.fontSizeXS
-                                font.bold: true
-                            }
-                        }
-                    }
-                    Rectangle { width: logList.width / 6; height: 32; color: "transparent"
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.defect_type || "--"
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                    }
-                    Rectangle { width: logList.width / 6; height: 32; color: "transparent"
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.confidence ? modelData.confidence.toFixed(3) : "--"
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                    }
-                    Rectangle { width: logList.width / 6; height: 32; color: "transparent"
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.operator_action || "--"
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                    }
-                }
+            EmptyState {
+                anchors.fill: parent
+                visible: logList.count === 0
+                title: qsTr("暂无检测日志")
+                message: qsTr("检测记录会在相机完成一次推理后写入本地日志。")
+                badgeText: qsTr("LOG")
+                accentColor: Theme.textSecondary
             }
         }
     }
